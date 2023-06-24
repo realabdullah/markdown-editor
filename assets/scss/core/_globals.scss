@@ -1,0 +1,13 @@
+html {
+  scroll-behavior: smooth;
+  font-size: 62.5%;
+}
+
+body {
+  font-family: $font-roboto;
+}
+
+::-webkit-scrollbar {
+  width: 0.1rem;
+  background-color: $col-darkCyanBlue;
+}
