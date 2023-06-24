@@ -7,7 +7,12 @@ const toggleMenu = (value: boolean) => isMenuOpen.value = value;
 <template>
   <div class="home d-flex">
     <BaseSideBar class="sidebar" v-show="isMenuOpen" />
-    <BaseHeader @toggle-menu="toggleMenu" />
+    <div class="home__container">
+      <BaseHeader @toggle-menu="toggleMenu" />
+      <div class="home__container-main">
+        
+      </div>
+    </div>
   </div>
 </template>
 
@@ -17,6 +22,18 @@ const toggleMenu = (value: boolean) => isMenuOpen.value = value;
 
   .sidebar {
     animation: slide-right 0.3s ease-out both;
+  }
+
+  &__container {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+
+    &-main {
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+    }
   }
 }
 
