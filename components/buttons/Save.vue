@@ -27,6 +27,8 @@ button {
   }
 
   span {
+    white-space: nowrap;
+    
     @media (max-width: 550px) {
       display: none;
     }

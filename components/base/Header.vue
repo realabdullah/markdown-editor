@@ -1,12 +1,22 @@
 <script lang="ts" setup>
+interface Emits {
+    (event: 'toggle-menu', value: boolean): void;
+}
+const emits = defineEmits<Emits>();
 
+const isMenuOpen = ref(false);
+
+const toggleMenu = () => {
+    isMenuOpen.value = !isMenuOpen.value;
+    emits('toggle-menu', isMenuOpen.value);
+};
 </script>
 
 <template>
     <header class="w-100 d-flex align-items-center">
         <div class="left d-flex align-items-center gap-5">
-            <button class="menu">
-                <IconsMenu />
+            <button class="menu" @click="toggleMenu">
+                <IconsMenu :variant="isMenuOpen ? 'close' : 'open'" />
             </button>
             <IconsLogo class="logo w-100" />
             <hr />

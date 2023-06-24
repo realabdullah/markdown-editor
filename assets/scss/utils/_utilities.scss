@@ -2,7 +2,7 @@
 $displays: flex, block, grid, none;
 @each $display in $displays {
   .d-#{$display} {
-    display: $display !important;
+    display: $display;
   }
 }
 
