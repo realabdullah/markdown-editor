@@ -1,0 +1,206 @@
+// display utilities
+$displays: flex, block, grid, none;
+@each $display in $displays {
+  .d-#{$display} {
+    display: $display !important;
+  }
+}
+
+// wrap utilities
+$wraps: nowrap, wrap, wrap-reverse;
+@each $wrap in $wraps {
+  .flex-#{$wrap} {
+    flex-wrap: $wrap !important;
+  }
+}
+
+// justify-content utilities
+$justify-contents: start, end, center, between, around;
+@each $justify-content in $justify-contents {
+  .justify-content-#{$justify-content} {
+    justify-content: $justify-content !important;
+  }
+}
+
+// align-items utilities
+$align-items: start, end, center, baseline, stretch;
+@each $align-item in $align-items {
+  .align-items-#{$align-item} {
+    align-items: $align-item !important;
+  }
+}
+
+// overflow utilities
+$overflows: auto, hidden, visible, scroll;
+@each $overflow in $overflows {
+  .overflow-#{$overflow} {
+    overflow: $overflow !important;
+  }
+}
+
+// overflow-x utilities
+$overflow-xes: auto, hidden, visible, scroll;
+@each $overflow-x in $overflow-xes {
+  .overflow-x-#{$overflow-x} {
+    overflow-x: $overflow-x !important;
+  }
+}
+
+// overflow-y utilities
+$overflow-yes: auto, hidden, visible, scroll;
+@each $overflow-y in $overflow-yes {
+  .overflow-y-#{$overflow-y} {
+    overflow-y: $overflow-y !important;
+  }
+}
+
+// visibility utilities
+$visibilities: visible, hidden, collapse;
+@each $visibility in $visibilities {
+  .visibility-#{$visibility} {
+    visibility: $visibility !important;
+  }
+}
+
+// z-index utilities
+$z-indexes: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9;
+@each $z-index in $z-indexes {
+  .z-index-#{$z-index} {
+    z-index: $z-index !important;
+  }
+}
+
+// opacity utilities
+$opacities: 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9;
+@each $opacity in $opacities {
+  .opacity-#{$opacity} {
+    opacity: $opacity !important;
+  }
+}
+
+// cursor utilities
+$cursors: auto, default, pointer, wait, text, move, not-allowed;
+@each $cursor in $cursors {
+  .cursor-#{$cursor} {
+    cursor: $cursor !important;
+  }
+}
+
+// user-select utilities
+$user-selects: none, auto, text, all;
+@each $user-select in $user-selects {
+  .user-select-#{$user-select} {
+    user-select: $user-select !important;
+  }
+}
+
+// pointer-events utilities
+$pointer-events: auto, none;
+@each $pointer-event in $pointer-events {
+  .pointer-events-#{$pointer-event} {
+    pointer-events: $pointer-event !important;
+  }
+}
+
+// position utilities
+$positions: static, relative, absolute, fixed, sticky;
+@each $position in $positions {
+  .position-#{$position} {
+    position: $position !important;
+  }
+}
+
+// text utilities
+$texts: left, right, center, justify;
+@each $text in $texts {
+  .text-#{$text} {
+    text-align: $text !important;
+  }
+}
+
+// text-decoration utilities
+$text-decorations: none, underline, overline, line-through;
+@each $text-decoration in $text-decorations {
+  .text-decoration-#{$text-decoration} {
+    text-decoration: $text-decoration !important;
+  }
+}
+
+// text-transform utilities
+$text-transforms: none, uppercase, lowercase, capitalize;
+@each $text-transform in $text-transforms {
+  .text-transform-#{$text-transform} {
+    text-transform: $text-transform !important;
+  }
+}
+
+// text-wrap utilities
+$text-wraps: normal, nowrap;
+@each $text-wrap in $text-wraps {
+  .text-wrap-#{$text-wrap} {
+    white-space: $text-wrap !important;
+  }
+}
+
+// text-overflow utilities
+$text-overflows: clip, ellipsis;
+@each $text-overflow in $text-overflows {
+  .text-overflow-#{$text-overflow} {
+    overflow: hidden;
+    text-overflow: $text-overflow;
+    white-space: nowrap;
+  }
+}
+
+// font-weight utilities
+$font-weights: 100, 300, 400, 500, 700, 900;
+@each $font-weight in $font-weights {
+  .font-weight-#{$font-weight} {
+    font-weight: $font-weight !important;
+  }
+}
+
+// font-style utilities
+$font-styles: normal, italic;
+@each $font-style in $font-styles {
+  .font-style-#{$font-style} {
+    font-style: $font-style !important;
+  }
+}
+
+// font-size utilities
+$font-sizes: 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 60, 72;
+@each $font-size in $font-sizes {
+  .font-size-#{$font-size} {
+    font-size: #{$font-size}px !important;
+  }
+}
+
+// text transform utilities
+$text-transforms: uppercase, lowercase, capitalize;
+@each $text-transform in $text-transforms {
+  .text-transform-#{$text-transform} {
+    text-transform: $text-transform !important;
+  }
+}
+
+// width utilities
+.w-100 {
+  width: 100% !important;
+}
+
+.w-auto {
+  width: auto !important;
+}
+
+// height utilities
+.h-100 {
+  height: 100% !important;
+}
+
+.h-auto {
+  height: auto !important;
+}
+
+
+

@@ -1,6 +1,3 @@
-{
-  root: {
-    true
-  }
-  extend: ["@nuxtjs/eslint-config-typescript"]
-}
+module.exports = {
+  root: true,
+};
