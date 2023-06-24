@@ -78,3 +78,10 @@ select {
     scroll-behavior: auto !important;
   }
 }
+
+button {
+  border: none;
+  outline: none;
+  background: transparent;
+  cursor: pointer;
+}

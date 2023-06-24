@@ -6,6 +6,22 @@ $displays: flex, block, grid, none;
   }
 }
 
+// direction utilities
+$directions: row, row-reverse, column, column-reverse;
+@each $direction in $directions {
+  .flex-#{$direction} {
+    flex-direction: $direction !important;
+  }
+}
+
+// gap utilities
+$gaps: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9;
+@each $gap in $gaps {
+  .gap-#{$gap} {
+    gap: calc(#{$gap} * 0.25rem) !important;
+  }
+}
+
 // wrap utilities
 $wraps: nowrap, wrap, wrap-reverse;
 @each $wrap in $wraps {
@@ -155,7 +171,7 @@ $text-overflows: clip, ellipsis;
 // font-weight utilities
 $font-weights: 100, 300, 400, 500, 700, 900;
 @each $font-weight in $font-weights {
-  .font-weight-#{$font-weight} {
+  .weight-#{$font-weight} {
     font-weight: $font-weight !important;
   }
 }

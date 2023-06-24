@@ -5,11 +5,11 @@ export default defineNuxtConfig({
     css: {
       preprocessorOptions: {
         scss: {
-          additionalData: `@import "@/assets/scss/core/_variables.scss";`,
+          additionalData: `@import "@/assets/scss/core/_variables.scss"; @import "@/assets/scss/utils/_mixins.scss";`,
         },
       },
     },
   },
   modules: ["@nuxtjs/eslint-module"],
-  devtools: { enabled: true },
+  // devtools: { enabled: true },
 });
