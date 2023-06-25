@@ -10,6 +10,12 @@ export default defineNuxtConfig({
       },
     },
   },
-  modules: ["@nuxtjs/eslint-module"],
+  imports: {
+    dirs: ["store"],
+  },
+  modules: ["@pinia/nuxt"],
+  pinia: {
+    autoImports: ["defineStore", "storeToRefs"],
+  },
   // devtools: { enabled: true },
 });

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-const docName = ref("Untitled Document.md");
+const { docTitle  } = storeToRefs(useStore());
 </script>
 
 <template>
@@ -7,7 +7,7 @@ const docName = ref("Untitled Document.md");
         <IconsDocument class="docsvg" />
         <form class="d-flex flex-column gap-1 w-100">
             <label for="docname" class="weight-300">Document Name</label>
-            <input type="text" id="docname" class="w-100 weight-400" name="docname" v-model="docName" />
+            <input type="text" id="docname" class="w-100 weight-400" name="docname" v-model="docTitle" />
         </form>
     </div>
 </template>

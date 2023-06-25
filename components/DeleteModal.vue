@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+const { docTitle  } = storeToRefs(useStore());
+
 interface Emit {
     (event: 'toggle-delete-modal'): void;
 }
@@ -11,7 +13,7 @@ const toggleDeleteModal = () => emits('toggle-delete-modal');
 <template>
     <div class="delete__modal d-flex flex-column w-100 h-100 position-absolute">
         <h4 class="weight-700">Delete this document?</h4>
-        <p class="weight-400">Are you sure you want to delete the ‘welcome.md’ document and its contents? This action cannot
+        <p class="weight-400">Are you sure you want to delete the ‘{{ docTitle }}’ document and its contents? This action cannot
             be reversed.</p>
         <button class="w-100 weight-400">Confirm & Delete</button>
     </div>

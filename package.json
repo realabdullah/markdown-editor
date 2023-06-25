@@ -11,13 +11,13 @@
   },
   "devDependencies": {
     "@nuxt/devtools": "latest",
-    "@nuxtjs/eslint-module": "^4.1.0",
     "@types/node": "^18",
-    "eslint": "^8.43.0",
     "nuxt": "^3.6.0",
     "typescript": "latest"
   },
   "dependencies": {
+    "@pinia/nuxt": "^0.4.11",
+    "pinia": "^2.1.4",
     "sass": "^1.63.6"
   }
 }
