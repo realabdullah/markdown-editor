@@ -22,13 +22,10 @@ body {
   --header-text-color: #35393f;
 }
 
-// Light Theme
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-color: #151619;
-    --deeper-bg-color: #2b2d31;
-    --text-color: #c1c4cb;
-    --sub-text-color: #c1c4cb;
-    --header-text-color: #ffffff;
-  }
+html[data-theme="dark"] {
+  --bg-color: #151619;
+  --deeper-bg-color: #2b2d31;
+  --text-color: #c1c4cb;
+  --sub-text-color: #c1c4cb;
+  --header-text-color: #ffffff;
 }

@@ -13,7 +13,7 @@
     "@nuxt/devtools": "latest",
     "@types/node": "^18",
     "nuxt": "^3.6.0",
-    "typescript": "latest"
+    "typescript": "^4.9.5"
   },
   "dependencies": {
     "@pinia/nuxt": "^0.4.11",

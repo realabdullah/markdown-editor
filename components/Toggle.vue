@@ -1,17 +1,21 @@
 <script lang="ts" setup>
-const currentMode = ref('light');
+const { currentTheme } = storeToRefs(useStore());
+const { setTheme  } = useStore();
 
-const switchTheme = () => currentMode.value = currentMode.value === "dark" ? "light" : "dark";
+const switchTheme = ($event: Event) => {
+    const target = $event.target as HTMLInputElement;
+    target.checked ? setTheme("light", "save") : setTheme("dark", "save");
+}
 </script>
 
 <template>
     <div class="d-flex align-items-center gap-5">
-        <IconsTheme variant="dark" :class="{ active: currentMode === 'dark' }" />
+        <IconsTheme variant="dark" :class="{ active: currentTheme === 'dark' }" />
         <div class="toggle position-relative">
-            <input id="switch" class="d-none" type="checkbox" :checked="currentMode === 'light'" @change="switchTheme" />
+            <input id="switch" class="d-none" type="checkbox" :checked="currentTheme === 'light'" @change="switchTheme" />
             <label for="switch" class="d-block position-relative"></label>
         </div>
-        <IconsTheme variant="light" :class="{ active: currentMode === 'light' }" />
+        <IconsTheme variant="light" :class="{ active: currentTheme === 'light' }" />
     </div>
 </template>
 

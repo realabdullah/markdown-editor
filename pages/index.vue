@@ -1,10 +1,19 @@
 <script lang="ts" setup>
+const { setTheme } = useStore();
+
 const isMenuOpen = ref(false);
 const isDeleteModalOpen = ref(false);
 
 const toggleDeleteModal = (value: boolean) => isDeleteModalOpen.value = value;
 
 const toggleMenu = (value: boolean) => isMenuOpen.value = value;
+
+const theme = useCookie('theme');
+
+onBeforeMount(() => {
+  if (theme.value) setTheme(theme.value);
+  else window.matchMedia('(prefers-color-scheme: dark)').matches && setTheme("dark");
+});
 </script>
 
 <template>
