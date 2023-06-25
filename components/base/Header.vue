@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 interface Emits {
     (event: 'toggle-menu', value: boolean): void;
+    (event: 'toggle-delete-modal', value: boolean): void;
 }
 const emits = defineEmits<Emits>();
 
@@ -10,6 +11,8 @@ const toggleMenu = () => {
     isMenuOpen.value = !isMenuOpen.value;
     emits('toggle-menu', isMenuOpen.value);
 };
+
+const toggleDeleteModal = () => emits('toggle-delete-modal', true);
 </script>
 
 <template>
@@ -24,7 +27,7 @@ const toggleMenu = () => {
         </div>
 
         <div class="right d-flex align-items-center gap-9">
-            <button class="delete">
+            <button class="delete" @click="toggleDeleteModal">
                 <IconsDelete />
             </button>
             <ButtonsSave />

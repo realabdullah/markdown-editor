@@ -1,5 +1,8 @@
 <script lang="ts" setup>
 const isMenuOpen = ref(false);
+const isDeleteModalOpen = ref(false);
+
+const toggleDeleteModal = (value: boolean) => isDeleteModalOpen.value = value;
 
 const toggleMenu = (value: boolean) => isMenuOpen.value = value;
 </script>
@@ -8,12 +11,18 @@ const toggleMenu = (value: boolean) => isMenuOpen.value = value;
   <div class="home d-flex">
     <BaseSideBar class="sidebar" v-show="isMenuOpen" />
     <div class="home__container">
-      <BaseHeader @toggle-menu="toggleMenu" />
-      <div class="home__container-main"></div>
-  </div>
-</div></template>
+      <BaseHeader @toggle-menu="toggleMenu" @toggle-delete-modal="toggleDeleteModal(true)" />
+      <div class="home__container-main">
 
-<style lang="scss" scoped>.home {
+      </div>
+    </div>
+  </div>
+
+  <DeleteModal v-if="isDeleteModalOpen" @toggle-delete-modal="toggleDeleteModal(false)" />
+</template>
+
+<style lang="scss" scoped>
+.home {
   height: 100vh;
 
   .sidebar {
