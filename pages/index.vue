@@ -9,15 +9,11 @@ const toggleMenu = (value: boolean) => isMenuOpen.value = value;
     <BaseSideBar class="sidebar" v-show="isMenuOpen" />
     <div class="home__container">
       <BaseHeader @toggle-menu="toggleMenu" />
-      <div class="home__container-main">
-        
-      </div>
-    </div>
+      <div class="home__container-main"></div>
   </div>
-</template>
+</div></template>
 
-<style lang="scss" scoped>
-.home {
+<style lang="scss" scoped>.home {
   height: 100vh;
 
   .sidebar {
@@ -33,6 +29,8 @@ const toggleMenu = (value: boolean) => isMenuOpen.value = value;
       width: 100%;
       height: 100%;
       overflow: auto;
+      background-color: var(--bg-color);
+      color: var(--text-color);
     }
   }
 }
