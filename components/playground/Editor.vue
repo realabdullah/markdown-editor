@@ -1,11 +1,11 @@
 <script lang="ts" setup>
-const readMe = ref("# Hello World");
+const { rawText } = storeToRefs(useStore());
 </script>
 
 <template>
     <div class="editor d-flex flex-column">
         <div class="header position-sticky weight-500">MARKDOWN</div>
-        <div class="editor__area" contenteditable="true">{{ readMe }}</div>
+        <textarea class="editor__area" v-model="rawText"></textarea>
     </div>
 </template>
 
@@ -27,6 +27,12 @@ const readMe = ref("# Hello World");
         background-color: var(--bg-color);
         color: var(--header-text-color);
         overflow: auto;
+        // reset textarea style
+        border: none;
+        outline: none;
+        resize: none;
+        // font
+        @include font(1.4rem, 1.6rem);
     }
 }
 </style>

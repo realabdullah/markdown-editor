@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+const { rawText } = storeToRefs(useStore());
+
 interface Emits {
     (event: 'toggle-menu', value: boolean): void;
     (event: 'toggle-delete-modal', value: boolean): void;
@@ -12,7 +14,9 @@ const toggleMenu = () => {
     emits('toggle-menu', isMenuOpen.value);
 };
 
-const toggleDeleteModal = () => emits('toggle-delete-modal', true);
+const toggleDeleteModal = () => {
+    if (rawText.value) return emits('toggle-delete-modal', true);
+}
 </script>
 
 <template>
@@ -40,7 +44,7 @@ header {
     height: 7.2rem;
     justify-content: space-between;
     background: $col-darkCyanBlue;
-    
+
     .left {
         .menu {
             height: 7.2rem;

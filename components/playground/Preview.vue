@@ -1,5 +1,25 @@
 <script lang="ts" setup>
-const readMe = ref("# Hello World");
+import { Remarkable } from 'remarkable';
+const { rawText, parsedText } = storeToRefs(useStore());
+
+const md = new Remarkable({
+    html: true,
+    breaks: true,
+    linkify: true,
+    typographer: true,
+});
+
+
+
+// parse markdown function
+const parseMarkdown = (text: string) => {
+    return md.render(text);
+};
+
+// watch playground text
+watchEffect(() => {
+    parsedText.value = parseMarkdown(rawText.value);
+});
 </script>
 
 <template>
@@ -10,7 +30,7 @@ const readMe = ref("# Hello World");
                 <IconsPreview />
             </button>
         </div>
-        <div class="preview__area">{{ readMe }}</div>
+        <div class="preview__area" v-html="parsedText"></div>
     </div>
 </template>
 
@@ -40,6 +60,7 @@ const readMe = ref("# Hello World");
         background-color: var(--bg-color);
         color: var(--header-text-color);
         overflow: auto;
+        padding-bottom: 10rem;
     }
 }
 </style>

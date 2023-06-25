@@ -3,6 +3,8 @@ import { defineStore } from "pinia";
 export const useStore = defineStore("store", () => {
     const docTitle = ref("Untitled Document.md");
     const currentTheme = ref("light");
+    const rawText = ref("");
+    const parsedText = ref("");
 
     // set theme based on prefers-color-scheme media query
     const setTheme = (theme: string, mode?: string) => {
@@ -16,6 +18,8 @@ export const useStore = defineStore("store", () => {
     };
 
     return {
+        rawText,
+        parsedText,
         docTitle,
         currentTheme,
         setTheme,
