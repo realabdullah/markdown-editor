@@ -21,8 +21,10 @@ onBeforeMount(() => {
     <BaseSideBar class="sidebar" v-show="isMenuOpen" />
     <div class="home__container">
       <BaseHeader @toggle-menu="toggleMenu" @toggle-delete-modal="toggleDeleteModal(true)" />
-      <div class="home__container-main">
-
+      <div class="home__container-main d-grid">
+        <PlaygroundEditor />
+        <hr>
+        <PlaygroundPreview />
       </div>
     </div>
   </div>
@@ -49,6 +51,14 @@ onBeforeMount(() => {
       overflow: auto;
       background-color: var(--bg-color);
       color: var(--text-color);
+      padding-bottom: 3rem;
+      
+      grid-template-columns: 1fr 1px 1fr;
+
+      hr {
+        background-color: $col-lightGrayShade;
+      }
+        
     }
   }
 }
