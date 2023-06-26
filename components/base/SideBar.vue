@@ -1,5 +1,12 @@
 <script lang="ts" setup>
+const { docs } = storeToRefs(useStore());
+const { setCurrentDoc } = useStore();
 
+const convertDate = (date: string) => {
+    const dateTime = new Date(date);
+    const options = { day: '2-digit', month: 'long', year: 'numeric' };
+    return dateTime.toLocaleDateString('en-US', options as any);
+}
 </script>
 
 <template>
@@ -10,19 +17,12 @@
 
             <ButtonsNewDoc />
 
-            <ul class="docs__list d-flex flex-column">
-                <li class="docs__list-doc d-flex align-items-center gap-6">
+            <ul v-if="docs && docs.length > 0" class="docs__list d-flex flex-column">
+                <li v-for="doc in docs" class="docs__list-doc d-flex align-items-center gap-6" @click="setCurrentDoc(doc.id)">
                     <IconsDocument />
                     <div class="docs__list-doc-info d-flex flex-column gap-3">
-                        <span class="docs__list-doc-info-date weight-300 text-overflow-ellipsis">01 April 2022</span>
-                        <span class="docs__list-doc-info-name weight-400 text-overflow-ellipsis">untitled-document.md</span>
-                    </div>
-                </li>
-                <li class="docs__list-doc d-flex align-items-center gap-6">
-                    <IconsDocument />
-                    <div class="docs__list-doc-info d-flex flex-column gap-3">
-                        <span class="docs__list-doc-info-date weight-300 text-overflow-ellipsis">01 April 2022</span>
-                        <span class="docs__list-doc-info-name weight-400 text-overflow-ellipsis">welcome.md</span>
+                        <span class="docs__list-doc-info-date weight-300 text-overflow-ellipsis">{{ convertDate(doc.created) }}</span>
+                        <span class="docs__list-doc-info-name weight-400 text-overflow-ellipsis">{{ doc.title }}</span>
                     </div>
                 </li>
             </ul>
@@ -62,6 +62,7 @@
 
             &-doc {
                 color: $col-white;
+                cursor: pointer;
 
                 &-info {
                     &-date {
@@ -74,6 +75,7 @@
                         @include font(1.5rem, 1.7rem);
                         white-space: nowrap;
                         color: $col-white;
+                        text-transform: capitalize;
                     }
                 }
             }

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-const { rawText } = storeToRefs(useStore());
+const { docTitle, rawText, docs, currentDocId } = storeToRefs(useStore());
 
 interface Emits {
     (event: 'toggle-menu', value: boolean): void;
@@ -17,6 +17,23 @@ const toggleMenu = () => {
 const toggleDeleteModal = () => {
     if (rawText.value) return emits('toggle-delete-modal', true);
 }
+
+const save = async() => {
+    if (!rawText.value) return;
+    const { addDoc, saveDoc, getDocs } = useMdDocs();
+    // check if doc already exists
+    const doc: Doc = docs.value.find((doc: Doc) => doc.id === currentDocId.value)!;
+    const docObj: Doc = { id: "", title: docTitle.value, content: rawText.value, created: new Date().toISOString() };
+    if (doc) {
+        docObj.id = doc.id;
+        docObj.created = doc.created;
+        await saveDoc(docObj);
+    } else {
+        docObj.id = window.crypto.getRandomValues(new Uint32Array(1))[0].toString(16);
+        await addDoc(docObj);
+    }
+    docs.value = await getDocs();
+};
 </script>
 
 <template>
@@ -34,7 +51,7 @@ const toggleDeleteModal = () => {
             <button class="delete" @click="toggleDeleteModal">
                 <IconsDelete />
             </button>
-            <ButtonsSave />
+            <ButtonsSave @save-changes="save" />
         </div>
     </header>
 </template>

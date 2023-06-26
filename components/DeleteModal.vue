@@ -1,23 +1,33 @@
 <script lang="ts" setup>
-const { docTitle  } = storeToRefs(useStore());
+const { docTitle, rawText, docs, currentDocId } = storeToRefs(useStore());
 
 interface Emit {
-    (event: 'toggle-delete-modal'): void;
+    (event: 'toggle-delete-modal', value: boolean): void;
 }
 
 const emits = defineEmits<Emit>();
 
-const toggleDeleteModal = () => emits('toggle-delete-modal');
+const toggleDeleteModal = (value: boolean) => emits('toggle-delete-modal', value);
+
+const deleteDoc = async () => {
+    const { deleteDoc, getDocs } = useMdDocs();
+    await deleteDoc(currentDocId.value);
+    docs.value = await getDocs();
+    docTitle.value = "Untitled Document.md";
+    rawText.value = "";
+    toggleDeleteModal(false);
+}
 </script>
 
 <template>
     <div class="delete__modal d-flex flex-column w-100 h-100 position-absolute">
         <h4 class="weight-700">Delete this document?</h4>
-        <p class="weight-400">Are you sure you want to delete the ‘{{ docTitle }}’ document and its contents? This action cannot
+        <p class="weight-400">Are you sure you want to delete the ‘{{ docTitle }}’ document and its contents? This action
+            cannot
             be reversed.</p>
-        <button class="w-100 weight-400">Confirm & Delete</button>
+        <button class="w-100 weight-400" @click="deleteDoc">Confirm & Delete</button>
     </div>
-    <div class="modal-overlay" @click="toggleDeleteModal"></div>
+    <div class="modal-overlay" @click="toggleDeleteModal(false)"></div>
 </template>
 
 <style lang="scss" scoped>

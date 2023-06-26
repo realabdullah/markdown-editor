@@ -1,9 +1,15 @@
 <script lang="ts" setup>
+const { docTitle, rawText, currentDocId } = storeToRefs(useStore());
 
+const createDoc = () => {
+    docTitle.value = "Untitled Document.md";
+    rawText.value = "";
+    currentDocId.value = "";
+}
 </script>
 
 <template>
-    <button class="weight-300 text-center" type="button">+ New Document</button>
+    <button class="weight-300 text-center" type="button" @click="createDoc">+ New Document</button>
 </template>
 
 <style lang="scss" scoped>

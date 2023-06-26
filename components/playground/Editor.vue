@@ -1,5 +1,15 @@
 <script lang="ts" setup>
 const { rawText, isPreviewActive } = storeToRefs(useStore());
+
+watchEffect(() => {
+    if (process.client && rawText.value !== "") localStorage.setItem('rawText', JSON.stringify(rawText.value));
+});
+
+onMounted(() => {
+    // get rawText from localStorage
+    const text = localStorage.getItem('rawText');
+    if (text && text !== "") rawText.value = JSON.parse(text);
+});
 </script>
 
 <template>

@@ -7,8 +7,9 @@ useHead({
       content: 'Home page of Markdown Playground',
     },
   ],
-})
-const { isPreviewActive } = storeToRefs(useStore());
+});
+
+const { isPreviewActive, docs } = storeToRefs(useStore());
 const { setTheme } = useStore();
 
 const isMenuOpen = ref(false);
@@ -20,9 +21,17 @@ const toggleMenu = (value: boolean) => isMenuOpen.value = value;
 
 const theme = useCookie('theme');
 
-onBeforeMount(() => {
+onBeforeMount(async () => {
   if (theme.value) setTheme(theme.value);
   else window.matchMedia('(prefers-color-scheme: dark)').matches && setTheme("dark");
+
+  // get all docs
+  const { getDocs } = useMdDocs();
+  const data = await getDocs();
+  if (data) {
+    data.sort((a: Doc, b: Doc) => new Date(b.created).getTime() - new Date(a.created).getTime());
+    docs.value = data;
+  }
 });
 </script>
 
@@ -34,12 +43,12 @@ onBeforeMount(() => {
       <div class="home__container-main d-grid" :class="{ main: !isPreviewActive }">
         <PlaygroundEditor v-show="!isPreviewActive" />
         <hr v-if="!isPreviewActive">
-        <PlaygroundPreview :class="isPreviewActive ? 'preview-pane-active': 'preview-pane-inactive'" />
+        <PlaygroundPreview :class="isPreviewActive ? 'preview-pane-active' : 'preview-pane-inactive'" />
       </div>
     </div>
   </div>
 
-  <DeleteModal v-if="isDeleteModalOpen" @toggle-delete-modal="toggleDeleteModal(false)" />
+  <DeleteModal v-if="isDeleteModalOpen" @toggle-delete-modal="toggleDeleteModal" />
 </template>
 
 <style lang="scss" scoped>

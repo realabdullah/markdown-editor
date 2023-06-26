@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-
+defineEmits(["save-changes"]);
 </script>
 
 <template>
-  <button class="d-flex align-items-center gap-3 weight-300" type="button">
+  <button class="d-flex align-items-center gap-3 weight-300" type="button" @click="$emit('save-changes')">
     <IconsSave class="icon" />
     <span>Save Changes</span>
   </button>

@@ -6,6 +6,8 @@ export const useStore = defineStore("store", () => {
     const rawText = ref("");
     const parsedText = ref("");
     const isPreviewActive = ref(false);
+    const docs = ref<Doc[]>([]);
+    const currentDocId = ref("");
 
     // set theme based on prefers-color-scheme media query
     const setTheme = (theme: string, mode?: string) => {
@@ -18,12 +20,25 @@ export const useStore = defineStore("store", () => {
         }
     };
 
+    // set current document to be edited
+    const setCurrentDoc = (id: string) => {
+        const doc = docs.value.find((doc) => doc.id === id);
+        if (doc) {
+            currentDocId.value = doc.id;
+            docTitle.value = doc.title;
+            rawText.value = doc.content;
+        }
+    };
+
     return {
         rawText,
         parsedText,
         docTitle,
         currentTheme,
         isPreviewActive,
+        currentDocId,
+        docs,
         setTheme,
+        setCurrentDoc,
     };
 });
