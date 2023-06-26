@@ -3,7 +3,7 @@
 import "../../assets/css/preview.css";
 
 import { Remarkable } from 'remarkable';
-const { rawText, parsedText } = storeToRefs(useStore());
+const { rawText, parsedText, isPreviewActive } = storeToRefs(useStore());
 
 const md = new Remarkable({
     html: true,
@@ -29,11 +29,11 @@ watchEffect(() => {
     <div class="preview d-flex flex-column">
         <div class="header position-sticky d-flex align-items-center weight-500">
             <span>PREVIEW</span>
-            <button>
-                <IconsPreview />
+            <button @click="isPreviewActive = !isPreviewActive">
+                <IconsPreview :is-preview-active="isPreviewActive" />
             </button>
         </div>
-        <div class="preview__area" v-html="parsedText"></div>
+        <div class="preview__area" :class="{ active: isPreviewActive }" v-html="parsedText"></div>
     </div>
 </template>
 
@@ -57,6 +57,10 @@ watchEffect(() => {
             color: var(--sub-text-color);
             width: 1.6rem;
             height: 1.2rem;
+
+            svg {
+                height: 100;
+            }
         }
     }
 
@@ -67,6 +71,18 @@ watchEffect(() => {
         color: var(--header-text-color);
         overflow: auto;
         padding-bottom: 10rem;
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+
+        &::-webkit-scrollbar {
+            display: none;
+        }
+    }
+
+    .active {
+        width: 100%;
+        max-width: 70rem;
+        margin: 0 auto;
     }
 }
 </style>

@@ -5,6 +5,7 @@ export const useStore = defineStore("store", () => {
     const currentTheme = ref("light");
     const rawText = ref("");
     const parsedText = ref("");
+    const isPreviewActive = ref(false);
 
     // set theme based on prefers-color-scheme media query
     const setTheme = (theme: string, mode?: string) => {
@@ -22,6 +23,7 @@ export const useStore = defineStore("store", () => {
         parsedText,
         docTitle,
         currentTheme,
+        isPreviewActive,
         setTheme,
     };
 });

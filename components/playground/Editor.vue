@@ -1,10 +1,15 @@
 <script lang="ts" setup>
-const { rawText } = storeToRefs(useStore());
+const { rawText, isPreviewActive } = storeToRefs(useStore());
 </script>
 
 <template>
     <div class="editor d-flex flex-column">
-        <div class="header position-sticky weight-500">MARKDOWN</div>
+        <div class="header position-sticky d-flex align-items-center weight-500">
+            <span>MARKDOWN</span>
+            <button @click="isPreviewActive = !isPreviewActive">
+                <IconsPreview :is-preview-active="isPreviewActive" />
+            </button>
+        </div>
         <textarea class="editor__area" v-model="rawText"></textarea>
     </div>
 </template>
@@ -15,11 +20,30 @@ const { rawText } = storeToRefs(useStore());
     
     .header {
         top: 0;
+        justify-content: space-between;
 
-        @include font(1.4rem, 1.6rem);
         padding: 1.2rem 1.6rem;
         background-color: var(--deeper-bg-color);
         color: var(--sub-text-color);
+
+        span {
+            @include font(1.4rem, 1.6rem);
+        }
+
+        button {
+            display: none;
+            color: var(--sub-text-color);
+            width: 1.6rem;
+            height: 1.2rem;
+
+            @media (max-width: 768px) {
+                display: block;
+            }
+
+            svg {
+                height: 100;
+            }
+        }
     }
 
     &__area {

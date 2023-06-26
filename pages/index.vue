@@ -1,4 +1,14 @@
 <script lang="ts" setup>
+useHead({
+  title: 'Markdown Playground',
+  meta: [
+    {
+      name: 'description',
+      content: 'Home page of Markdown Playground',
+    },
+  ],
+})
+const { isPreviewActive } = storeToRefs(useStore());
 const { setTheme } = useStore();
 
 const isMenuOpen = ref(false);
@@ -21,10 +31,10 @@ onBeforeMount(() => {
     <BaseSideBar class="sidebar" v-show="isMenuOpen" />
     <div class="home__container">
       <BaseHeader @toggle-menu="toggleMenu" @toggle-delete-modal="toggleDeleteModal(true)" />
-      <div class="home__container-main d-grid">
-        <PlaygroundEditor />
-        <hr>
-        <PlaygroundPreview />
+      <div class="home__container-main d-grid" :class="{ main: !isPreviewActive }">
+        <PlaygroundEditor v-show="!isPreviewActive" />
+        <hr v-if="!isPreviewActive">
+        <PlaygroundPreview :class="isPreviewActive ? 'preview-pane-active': 'preview-pane-inactive'" />
       </div>
     </div>
   </div>
@@ -52,13 +62,36 @@ onBeforeMount(() => {
       background-color: var(--bg-color);
       color: var(--text-color);
       padding-bottom: 3rem;
-      
+
+      hr {
+        @media (max-width: 768px) {
+          display: none !important;
+        }
+      }
+
+      .preview-pane {
+        @media (max-width: 768px) {
+          display: block;
+        }
+      }
+
+      .preview-pane-inactive {
+        @media (max-width: 768px) {
+          display: none;
+        }
+      }
+    }
+
+    .main {
       grid-template-columns: 50% 1px 50%;
+
+      @media (max-width: 768px) {
+        grid-template-columns: 1fr;
+      }
 
       hr {
         background-color: $col-lightGrayShade;
       }
-        
     }
   }
 }
