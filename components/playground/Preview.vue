@@ -1,4 +1,7 @@
 <script lang="ts" setup>
+// import css
+import "../../assets/css/preview.css";
+
 import { Remarkable } from 'remarkable';
 const { rawText, parsedText } = storeToRefs(useStore());
 
@@ -36,7 +39,8 @@ watchEffect(() => {
 
 <style lang="scss" scoped>
 .preview {
-
+    overflow: auto;
+    
     .header {
         top: 0;
         justify-content: space-between;
@@ -51,6 +55,8 @@ watchEffect(() => {
 
         button {
             color: var(--sub-text-color);
+            width: 1.6rem;
+            height: 1.2rem;
         }
     }
 

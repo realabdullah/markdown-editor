@@ -1,0 +1,136 @@
+.preview__area blockquote {
+    margin: 1.1rem 0;
+    padding: 2.4rem;
+    padding-right: 3.2rem;
+    background-color: var(--deeper-bg-color);
+    border-radius: 0.4rem;
+    border-left: 0.4rem solid #e46643;
+}
+
+.preview__area blockquote p {
+    color: var(--header-text-color);
+    font-size: 1.4rem;
+    line-height: 2.4rem;
+    font-weight: 700;
+    overflow-wrap: break-word;
+}
+
+.preview__area a {
+    color: inherit;
+    text-decoration: underline;
+    overflow-wrap: break-word;
+}
+
+.preview__area h1 {
+    color: var(--header-text-color);
+    font-size: 3.2rem;
+    line-height: 4.2rem;
+    font-weight: 700;
+    padding: 1.1rem 0;
+    overflow-wrap: break-word;
+}
+
+.preview__area p {
+    color: var(--sub-text-color);
+    font-size: 1.4rem;
+    line-height: 2.4rem;
+    font-weight: 400;
+    padding: 1.1rem 0;
+    overflow-wrap: break-word;
+}
+
+.preview__area h2 {
+    color: var(--header-text-color);
+    font-size: 2.8rem;
+    line-height: 3.6rem;
+    font-weight: 300;
+    padding: 1.1rem 0;
+    overflow-wrap: break-word;
+}
+
+.preview__area ol {
+    color: var(--sub-text-color);
+    font-size: 1.4rem;
+    line-height: 2.4rem;
+    font-weight: 400;
+    padding: 1.1rem 0;
+    padding-left: 2.4rem;
+}
+
+.preview__area h3 {
+    color: var(--header-text-color);
+    font-size: 2.4rem;
+    line-height: 3.2rem;
+    font-weight: 700;
+    padding: 1.1rem 0;
+    overflow-wrap: break-word;
+}
+
+.preview__area ul {
+    color: var(--sub-text-color);
+    font-size: 1.4rem;
+    line-height: 2.4rem;
+    font-weight: 400;
+    padding: 1.1rem 0;
+    padding-left: 2.4rem;
+    list-style: none;
+}
+
+.preview__area ul li {
+    padding: 0.8rem 0;
+    overflow-wrap: break-word;
+}
+
+.preview__area ul li::before {
+    content: "";
+    display: inline-block;
+    width: 0.3rem;
+    height: 0.3rem;
+    background-color: #e46643;
+    border-radius: 50%;
+    margin-right: 1.6rem;
+}
+
+.preview__area h4 {
+    color: var(--header-text-color);
+    font-size: 2rem;
+    line-height: 2.6rem;
+    font-weight: 700;
+    padding: 1.1rem 0;
+    overflow-wrap: break-word;
+}
+
+.preview__area h5 {
+    color: var(--header-text-color);
+    font-size: 1.6rem;
+    line-height: 2.1rem;
+    font-weight: 700;
+    padding: 1.1rem 0;
+    overflow-wrap: break-word;
+}
+
+.preview__area h6 {
+    color: #e46643;
+    font-size: 1.4rem;
+    line-height: 1.8rem;
+    font-weight: 700;
+    padding: 1.1rem 0;
+    overflow-wrap: break-word;
+}
+
+.preview__area pre {
+    margin: 1.1rem 0;
+    padding: 2.4rem;
+    background-color: var(--deeper-bg-color);
+    border-radius: 0.4rem;
+    overflow-wrap: break-word;
+}
+
+.preview__area pre code {
+    color: var(--header-text-color);
+    font-size: 1.4rem;
+    line-height: 2.4rem;
+    font-weight: 400;
+    overflow-wrap: break-word;
+    white-space: break-spaces;
+}

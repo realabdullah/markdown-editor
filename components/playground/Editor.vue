@@ -11,7 +11,8 @@ const { rawText } = storeToRefs(useStore());
 
 <style lang="scss" scoped>
 .editor {
-
+    overflow: auto;
+    
     .header {
         top: 0;
 

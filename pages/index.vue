@@ -48,12 +48,12 @@ onBeforeMount(() => {
     &-main {
       width: 100%;
       height: 100%;
-      overflow: auto;
+      overflow: hidden;
       background-color: var(--bg-color);
       color: var(--text-color);
       padding-bottom: 3rem;
       
-      grid-template-columns: 1fr 1px 1fr;
+      grid-template-columns: 50% 1px 50%;
 
       hr {
         background-color: $col-lightGrayShade;
