@@ -1,5 +1,5 @@
 {
-  "name": "nuxt-app",
+  "name": "markdown-editor",
   "private": true,
   "scripts": {
     "build": "nuxt build",
@@ -7,20 +7,33 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "lint": "eslint --ext .js,.vue --ignore-path .gitignore ."
+    "lint": "eslint .",
+    "typecheck": "nuxt typecheck"
   },
   "devDependencies": {
-    "@nuxt/devtools": "latest",
-    "@types/node": "^18",
-    "nuxt": "^3.6.0",
-    "typescript": "^4.9.5"
+    "@fontsource-variable/inter": "^5.1.0",
+    "@nuxtjs/tailwindcss": "^6.12.3",
+    "@types/markdown-it": "^14.1.2",
+    "@tailwindcss/typography": "^0.5.16",
+    "@types/node": "^22.15.3",
+    "@typescript-eslint/eslint-plugin": "^8.29.0",
+    "@typescript-eslint/parser": "^8.29.0",
+    "eslint": "^9.25.1",
+    "eslint-plugin-vue": "^10.0.0",
+    "nuxt": "^4.0.0",
+    "typescript": "^5.8.3",
+    "vue-eslint-parser": "^10.1.3"
   },
   "dependencies": {
-    "@pinia/nuxt": "^0.4.11",
-    "@types/remarkable": "^2.0.3",
+    "@codemirror/commands": "^6.8.1",
+    "@codemirror/lang-markdown": "^6.3.3",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.37.1",
+    "codemirror": "^6.0.1",
+    "dompurify": "^3.2.6",
     "idb": "^7.1.1",
-    "pinia": "^2.1.4",
-    "remarkable": "^2.0.1",
-    "sass": "^1.63.6"
+    "jspdf": "^3.0.1",
+    "markdown-it": "^14.1.0",
+    "reka-ui": "latest"
   }
 }

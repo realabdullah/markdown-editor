@@ -1,0 +1,50 @@
+@import "@fontsource-variable/inter";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#__nuxt {
+  height: 100%;
+}
+
+body {
+  background: #0a0a0a;
+  color: #f4f4f5;
+  font-family: InterVariable, Inter, Geist, ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv11" 1, "cv10" 1;
+}
+
+::selection {
+  background: rgb(63 63 70 / 0.6);
+  color: #f4f4f5;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+*:hover {
+  scrollbar-color: rgb(63 63 70) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 10px;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+  background-color: rgb(63 63 70);
+}

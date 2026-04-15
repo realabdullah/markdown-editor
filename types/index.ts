@@ -1,6 +1,7 @@
-interface Doc {
-    id: string;
-    title: string;
-    content: string;
-    created: string;
-};
+export interface MarkdownDoc {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}

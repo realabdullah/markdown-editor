@@ -1,63 +1,62 @@
-# Nuxt 3 Minimal Starter
+# Markdown Editor
 
-Look at the [Nuxt 3 documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+Markdown editor with local/offline document management and real-time preview.
+
+## Technical Overview
+
+- Framework: Nuxt 4, Vue 3.5
+- State: Nuxt `useState` composables
+- Editor: CodeMirror 6
+- Markdown pipeline: `markdown-it` + `dompurify`
+- Persistence: IndexedDB (`idb`) + localStorage draft cache
+- UI: Tailwind CSS + `@tailwindcss/typography`
+
+## Requirements
+
+- Node.js 20+ (recommended 22+)
+- pnpm 10+ (or npm/yarn equivalent)
 
 ## Setup
 
-Make sure to install the dependencies:
+Install dependencies:
 
 ```bash
-# npm
-npm install
-
-# pnpm
 pnpm install
-
-# yarn
-yarn install
 ```
 
-## Development Server
-
-Start the development server on `http://localhost:3000`:
+Start development server:
 
 ```bash
-# npm
-npm run dev
-
-# pnpm
 pnpm run dev
-
-# yarn
-yarn dev
 ```
 
-## Production
+Application URL:
 
-Build the application for production:
+- `http://localhost:3000`
+
+## Scripts
+
+- `pnpm run dev` - Start Nuxt development server
+- `pnpm run build` - Build production bundle
+- `pnpm run preview` - Preview production build
+- `pnpm run generate` - Generate static output
+- `pnpm run lint` - Run ESLint
+- `pnpm run typecheck` - Run Nuxt type checking
+
+## Deployment
+
+Build:
 
 ```bash
-# npm
-npm run build
-
-# pnpm
 pnpm run build
-
-# yarn
-yarn build
 ```
 
-Locally preview production build:
+Run:
 
 ```bash
-# npm
-npm run preview
-
-# pnpm
-pnpm run preview
-
-# yarn
-yarn preview
+node .output/server/index.mjs
 ```
 
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+## Notes
+
+- Documents are stored locally in browser storage (IndexedDB/localStorage).
