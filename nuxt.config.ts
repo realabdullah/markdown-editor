@@ -1,4 +1,4 @@
-import { defineNuxtConfig } from "nuxt/config";
+import { defineNuxtConfig } from "nuxt/config"
 
 export default defineNuxtConfig({
   compatibilityDate: "2026-04-15",
@@ -22,7 +22,7 @@ export default defineNuxtConfig({
         "@codemirror/commands",
         "@codemirror/lang-markdown",
         "markdown-it",
-        "dompurify",
+        "isomorphic-dompurify",
         "idb",
       ],
     },
@@ -40,10 +40,19 @@ export default defineNuxtConfig({
       ],
     },
   },
-  nitro: {
-    preset: "node-server",
+  runtimeConfig: {
+    supabaseSecretKey: process.env.NUXT_SUPABASE_SECRET_KEY,
+    rateLimitPepper: process.env.NUXT_RATE_LIMIT_PEPPER,
+    public: {
+      supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL,
+      supabasePublishableKey: process.env.NUXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    },
   },
   routeRules: {
-    "/": { prerender: true },
+    "/api/**": { cache: false },
+    "/p/**": {
+      cache: false,
+      headers: { "cache-control": "no-store" },
+    },
   },
-});
+})

@@ -4,10 +4,38 @@ import tsParser from "@typescript-eslint/parser";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 
 export default [
+  {
+    ignores: [
+      ".nuxt/**",
+      ".output/**",
+      ".nitro/**",
+      "dist/**",
+      "node_modules/**",
+      "supabase/.temp/**",
+    ],
+  },
   js.configs.recommended,
   ...vue.configs["flat/recommended"],
   {
-    files: ["**/*.{ts,vue}"],
+    files: ["**/*.ts"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module",
+      },
+    },
+    plugins: {
+      "@typescript-eslint": tsPlugin,
+    },
+    rules: {
+      "no-undef": "off",
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+    },
+  },
+  {
+    files: ["**/*.vue"],
     languageOptions: {
       parser: vue.parser,
       parserOptions: {
@@ -15,15 +43,13 @@ export default [
         ecmaVersion: "latest",
         sourceType: "module",
       },
-      globals: {
-        window: "readonly",
-        document: "readonly",
-      },
     },
     plugins: {
       "@typescript-eslint": tsPlugin,
     },
     rules: {
+      "no-undef": "off",
+      "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
       "vue/multi-word-component-names": "off",
     },

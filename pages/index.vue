@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import {
   DialogContent,
   DialogOverlay,
@@ -7,20 +7,12 @@ import {
   DialogRoot,
   DialogTitle,
 } from "reka-ui";
-import { Compartment, EditorState } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers, type ViewUpdate } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { markdown } from "@codemirror/lang-markdown";
-import { useEditorState } from "../composables/useEditorState";
-import { useMdDocs } from "../composables/useIdb";
-import { useKeyboardShortcuts } from "../composables/useKeyboardShortcuts";
-import { useMarkdown } from "../composables/useMarkdown";
-import { useToasts } from "../composables/useToasts";
-import type { MarkdownDoc } from "../types";
+import type { ApiErrorBody, DocumentDetail, PublicationStatus } from "~/types";
 
 const {
   documents,
   activeDocumentId,
+  activeDocumentVersion,
   documentTitle,
   editorContent,
   searchQuery,
@@ -35,28 +27,45 @@ const {
   hydrateTheme,
   hydrateDraft,
   cacheDraft,
-  makeDocId,
+  clearDraft,
+  clearScopeDrafts,
+  setDraftContext,
   setActiveDocument,
   resetDraft,
   updateEditor,
   updateTitle,
 } = useEditorState();
 
-const { getDocs, saveDoc, deleteDoc } = useMdDocs();
-const { renderMarkdown } = useMarkdown();
+const { user, initialize: initializeAuth, signOut } = useAuth();
+const { repository, localDocs, importLocalDocument } = useDocumentRepository();
+const { containsRemoteImages, renderMarkdown } = useMarkdown();
 const { toasts, push: pushToast, dismiss } = useToasts();
 
 const titleInput = ref<HTMLInputElement | null>(null);
 const paletteInput = ref<HTMLInputElement | null>(null);
 const previewRoot = ref<HTMLElement | null>(null);
-const editorRoot = ref<HTMLElement | null>(null);
 const isDraggingFile = ref(false);
 const sidebarCollapsed = ref(false);
 const mobileSidebarOpen = ref(false);
 const paletteOpen = ref(false);
 const paletteQuery = ref("");
-let editorView: EditorView | null = null;
-const editorThemeCompartment = new Compartment();
+const importDialogOpen = ref(false);
+const importBusy = ref(false);
+const localDocuments = ref<DocumentDetail[]>([]);
+const importedLocalIds = ref<string[]>([]);
+const publicationDialogOpen = ref(false);
+const publicationBusy = ref(false);
+const publicationStatus = ref<PublicationStatus | null>(null);
+const conflictDocument = ref<DocumentDetail | null>(null);
+const signOutDialogOpen = ref(false);
+const deleteAccountOpen = ref(false);
+const deleteConfirmation = ref("");
+const accountBusy = ref(false);
+
+const storageScope = computed(() => user.value ? `user:${user.value.id}` : "guest");
+const importedIdsKey = computed(() =>
+  user.value ? `md-editor-imported:${user.value.id}` : "",
+);
 
 const isDark = computed(() => themeMode.value === "dark");
 
@@ -139,6 +148,7 @@ const asHtmlFilename = (title: string) => `${normalizeTitle(title)}.html`;
 const asPdfFilename = (title: string) => `${normalizeTitle(title)}.pdf`;
 
 const renderedHtml = computed(() => renderMarkdown(editorContent.value, previewStyle.value));
+const hasRemoteImages = computed(() => containsRemoteImages(editorContent.value));
 
 const paletteResults = computed(() => {
   const q = paletteQuery.value.trim().toLowerCase();
@@ -153,42 +163,94 @@ const paletteResults = computed(() => {
 const showEditorPane = computed(() => layoutMode.value !== "preview");
 const showPreviewPane = computed(() => layoutMode.value !== "editor");
 
+const getApiError = (error: unknown) =>
+  (error as { data?: ApiErrorBody })?.data;
+
+const getUserFacingError = (error: unknown, fallback: string) => {
+  const code = getApiError(error)?.data?.code;
+  switch (code) {
+    case "AUTHENTICATION_REQUIRED":
+      return "Your session expired. Sign in and try again.";
+    case "REAUTHENTICATION_REQUIRED":
+      return "Sign in again before deleting your account.";
+    case "DOCUMENT_LIMIT_REACHED":
+      return "Your account has reached its document limit. Delete a document and try again.";
+    case "RATE_LIMITED":
+      return "Too many attempts. Wait a moment and try again.";
+    default:
+      return fallback;
+  }
+};
+
 const loadDocs = async () => {
-  documents.value = await getDocs();
+  try {
+    documents.value = await repository.value.list();
+  } catch (error) {
+    pushToast(getUserFacingError(error, "Unable to load documents. Try again."), "error");
+  }
 };
 
 const saveCurrentDocument = async () => {
-  const now = new Date().toISOString();
-  const currentId = activeDocumentId.value || makeDocId();
-  const existingDoc = documents.value.find((item) => item.id === currentId);
-  const doc: MarkdownDoc = {
-    id: currentId,
-    title: normalizeTitle(documentTitle.value),
-    content: editorContent.value,
-    createdAt: existingDoc?.createdAt || now,
-    updatedAt: now,
-  };
+  const previousDraftId = activeDocumentId.value || "new";
+  try {
+    const input = {
+      title: normalizeTitle(documentTitle.value),
+      content: editorContent.value,
+    };
+    const saved = activeDocumentId.value
+      ? await repository.value.update(activeDocumentId.value, {
+          ...input,
+          expectedVersion: activeDocumentVersion.value,
+        })
+      : await repository.value.create(input);
 
-  await saveDoc(doc);
-  activeDocumentId.value = currentId;
-  isDirty.value = false;
-  await loadDocs();
-  pushToast("Document saved", "success");
+    clearDraft(storageScope.value, previousDraftId);
+    setActiveDocument(saved, storageScope.value);
+    isDirty.value = false;
+    await loadDocs();
+    pushToast("Document saved", "success");
+    return true;
+  } catch (error) {
+    const apiError = getApiError(error);
+    if (apiError?.data?.code === "VERSION_CONFLICT" && apiError.data.currentDocument) {
+      conflictDocument.value = apiError.data.currentDocument;
+    } else {
+      pushToast(getUserFacingError(error, "Unable to save the document. Try again."), "error");
+    }
+    return false;
+  }
 };
 
 const removeCurrentDocument = async () => {
   if (!activeDocumentId.value) {
-    resetDraft();
+    clearDraft(storageScope.value, "new");
+    resetDraft(storageScope.value);
     isDeleteOpen.value = false;
     pushToast("Draft cleared", "info");
     return;
   }
 
-  await deleteDoc(activeDocumentId.value);
-  resetDraft();
-  await loadDocs();
-  isDeleteOpen.value = false;
-  pushToast("Document deleted", "success");
+  try {
+    await repository.value.remove(activeDocumentId.value);
+    clearDraft(storageScope.value, activeDocumentId.value);
+    resetDraft(storageScope.value);
+    await loadDocs();
+    isDeleteOpen.value = false;
+    pushToast("Document deleted", "success");
+  } catch (error) {
+    pushToast(getUserFacingError(error, "Unable to delete the document. Try again."), "error");
+  }
+};
+
+const newDocument = () => resetDraft(storageScope.value);
+
+const openDocument = async (id: string) => {
+  try {
+    const document = await repository.value.get(id);
+    setActiveDocument(document, storageScope.value);
+  } catch (error) {
+    pushToast(getUserFacingError(error, "Unable to open the document. Try again."), "error");
+  }
 };
 
 const switchTheme = () => {
@@ -225,8 +287,8 @@ const openPalette = async () => {
   paletteInput.value?.focus();
 };
 
-const selectFromPalette = (id: string) => {
-  setActiveDocument(id);
+const selectFromPalette = async (id: string) => {
+  await openDocument(id);
   paletteOpen.value = false;
   paletteQuery.value = "";
   pushToast("File opened", "info");
@@ -242,10 +304,20 @@ const exportMarkdown = () => {
   pushToast("Exported .md", "success");
 };
 
+const downloadDraft = () => {
+  exportMarkdown();
+  pushToast("Your changes are still available", "info");
+};
+
 const exportHtml = () => {
+  const safeTitle = documentTitle.value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
   const htmlContent = `<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"/><title>${documentTitle.value}</title></head>
+<head><meta charset="utf-8"/><title>${safeTitle}</title></head>
 <body>${renderedHtml.value}</body>
 </html>`;
   const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
@@ -281,49 +353,224 @@ const importFile = async (file: File) => {
   updateTitle(normalizeTitle(file.name));
   updateEditor(content);
   activeDocumentId.value = "";
+  activeDocumentVersion.value = 0;
+  setDraftContext(storageScope.value, "new");
   isDraggingFile.value = false;
   pushToast("Markdown imported", "success");
 };
 
-const buildEditorTheme = () =>
-  EditorView.theme({
-    "&": {
-      height: "100%",
-      fontSize: "15px",
-      fontFamily: "InterVariable, Inter, Geist, sans-serif",
-      background: "transparent",
-      color: isDark.value ? "rgb(250 250 250)" : "rgb(24 24 27)",
-    },
-    ".cm-content": {
-      padding: "20px",
-      minHeight: "100%",
-      lineHeight: "1.75",
-      caretColor: isDark.value ? "rgb(255 255 255)" : "rgb(24 24 27)",
-    },
-    ".cm-gutters": {
-      borderRight: isDark.value
-        ? "1px solid rgba(255,255,255,0.05)"
-        : "1px solid rgba(39,39,42,0.15)",
-      backgroundColor: "transparent",
-      color: isDark.value ? "rgb(113 113 122)" : "rgb(82 82 91)",
-    },
-    ".cm-focused": {
-      outline: "none",
-    },
-    ".cm-cursor, .cm-dropCursor": {
-      borderLeftColor: isDark.value ? "rgb(255 255 255)" : "rgb(24 24 27)",
-      borderLeftWidth: "2px",
-    },
-    ".cm-selectionBackground, .cm-content ::selection": {
-      backgroundColor: isDark.value
-        ? "rgba(161, 161, 170, 0.2)"
-        : "rgba(113, 113, 122, 0.22)",
-    },
-    ".cm-activeLineGutter": {
-      background: "transparent",
-      color: isDark.value ? "rgb(228 228 231)" : "rgb(39 39 42)",
-    },
-  });
+const loadLocalImportCandidates = async () => {
+  if (!user.value) {
+    return;
+  }
+  localDocuments.value = await localDocs.getDocs();
+  const stored = localStorage.getItem(importedIdsKey.value);
+  try {
+    const parsed = stored ? JSON.parse(stored) : [];
+    importedLocalIds.value = Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === "string")
+      : [];
+  } catch {
+    importedLocalIds.value = [];
+  }
+  if (localDocuments.value.some((document) => !importedLocalIds.value.includes(document.id))) {
+    importDialogOpen.value = true;
+  }
+};
+
+const importSelectedDocuments = async (ids: string[]) => {
+  importBusy.value = true;
+  let imported = 0;
+  let failed = 0;
+  try {
+    for (const id of ids) {
+      const document = localDocuments.value.find((item) => item.id === id);
+      if (!document) {
+        continue;
+      }
+      try {
+        const persisted = await importLocalDocument({
+          localDocumentId: document.id,
+          title: document.title,
+          content: document.content,
+          createdAt: document.createdAt,
+        });
+        if (persisted.title !== document.title || persisted.content !== document.content) {
+          throw new Error("The imported document could not be verified");
+        }
+        if (!importedLocalIds.value.includes(id)) {
+          importedLocalIds.value.push(id);
+        }
+        localStorage.setItem(importedIdsKey.value, JSON.stringify(importedLocalIds.value));
+        imported += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    await loadDocs();
+    if (failed) {
+      const remaining = failed === 1
+        ? "1 document is still available on this device."
+        : `${failed} documents are still available on this device.`;
+      pushToast(`${imported} added to your account. ${remaining}`, "error");
+    } else {
+      pushToast(`${imported} ${imported === 1 ? "document" : "documents"} added to your account`, "success");
+    }
+  } finally {
+    importBusy.value = false;
+  }
+};
+
+const cleanupImportedDocuments = async (ids: string[]) => {
+  if (!window.confirm("Remove these documents from this device? They will remain in your account.")) {
+    return;
+  }
+  importBusy.value = true;
+  await Promise.all(ids.map((id) => localDocs.deleteDoc(id)));
+  localDocuments.value = await localDocs.getDocs();
+  importBusy.value = false;
+  pushToast("Documents removed from this device", "success");
+};
+
+const openPublicationDialog = async () => {
+  if (!user.value || !activeDocumentId.value || isDirty.value) {
+    return;
+  }
+  publicationBusy.value = true;
+  publicationDialogOpen.value = true;
+  try {
+    publicationStatus.value = await $fetch<PublicationStatus>(
+      `/api/documents/${activeDocumentId.value}/publication`,
+    );
+  } catch (error) {
+    pushToast(getUserFacingError(error, "Unable to load sharing options. Try again."), "error");
+    publicationDialogOpen.value = false;
+  } finally {
+    publicationBusy.value = false;
+  }
+};
+
+const publishDocument = async () => {
+  publicationBusy.value = true;
+  try {
+    publicationStatus.value = await $fetch<PublicationStatus>(
+      `/api/documents/${activeDocumentId.value}/publication`,
+      { method: "PUT", body: { expectedVersion: activeDocumentVersion.value } },
+    );
+    pushToast("Document shared", "success");
+  } catch (error) {
+    pushToast(getUserFacingError(error, "Unable to share the document. Try again."), "error");
+  } finally {
+    publicationBusy.value = false;
+  }
+};
+
+const unpublishDocument = async () => {
+  publicationBusy.value = true;
+  try {
+    await $fetch(`/api/documents/${activeDocumentId.value}/publication`, { method: "DELETE" });
+    publicationStatus.value = {
+      isPublished: false,
+      publicToken: null,
+      publicUrl: null,
+      publishedAt: null,
+      sourceVersion: null,
+    };
+    pushToast("Shared link disabled", "success");
+  } catch (error) {
+    pushToast(getUserFacingError(error, "Unable to disable the link. Try again."), "error");
+  } finally {
+    publicationBusy.value = false;
+  }
+};
+
+const copyPublicationUrl = async () => {
+  if (publicationStatus.value?.publicUrl) {
+    await navigator.clipboard.writeText(publicationStatus.value.publicUrl);
+    pushToast("Link copied", "success");
+  }
+};
+
+const performSignOut = async (discardDraft = false) => {
+  const scope = storageScope.value;
+  if (discardDraft) {
+    clearDraft(scope, activeDocumentId.value || "new");
+  }
+  try {
+    await signOut();
+    clearScopeDrafts(scope);
+    resetDraft("guest");
+    hydrateDraft("guest");
+    await loadDocs();
+    signOutDialogOpen.value = false;
+    pushToast("Signed out. Documents on this device are still available.", "info");
+  } catch (error) {
+    pushToast(getUserFacingError(error, "Unable to sign out. Try again."), "error");
+  }
+};
+
+const requestSignOut = () => {
+  if (isDirty.value) {
+    signOutDialogOpen.value = true;
+    return;
+  }
+  void performSignOut();
+};
+
+const saveThenSignOut = async () => {
+  if (await saveCurrentDocument()) {
+    await performSignOut();
+  }
+};
+
+const deleteAccount = async () => {
+  if (deleteConfirmation.value !== "DELETE") {
+    return;
+  }
+  accountBusy.value = true;
+  const scope = storageScope.value;
+  try {
+    await $fetch("/api/account", {
+      method: "DELETE",
+      body: { confirmation: deleteConfirmation.value },
+    });
+    try {
+      await signOut();
+    } catch {
+      user.value = null;
+    }
+    clearScopeDrafts(scope);
+    deleteAccountOpen.value = false;
+    deleteConfirmation.value = "";
+    resetDraft("guest");
+    hydrateDraft("guest");
+    await loadDocs();
+    pushToast("Account and documents deleted", "success");
+  } catch (error) {
+    pushToast(getUserFacingError(error, "Unable to delete the account. Try again."), "error");
+  } finally {
+    accountBusy.value = false;
+  }
+};
+
+const reloadConflictVersion = () => {
+  if (!conflictDocument.value) {
+    return;
+  }
+  clearDraft(storageScope.value, activeDocumentId.value);
+  setActiveDocument(conflictDocument.value, storageScope.value);
+  conflictDocument.value = null;
+  pushToast("Opened the latest version", "info");
+};
+
+const saveConflictAsCopy = async () => {
+  conflictDocument.value = null;
+  activeDocumentId.value = "";
+  activeDocumentVersion.value = 0;
+  setDraftContext(storageScope.value, "new");
+  documentTitle.value = `${normalizeTitle(documentTitle.value)} copy`;
+  await saveCurrentDocument();
+};
 
 const handleDrop = async (event: DragEvent) => {
   event.preventDefault();
@@ -334,51 +581,7 @@ const handleDrop = async (event: DragEvent) => {
   }
 };
 
-const mountEditor = () => {
-  if (!editorRoot.value) {
-    return;
-  }
-
-  const state = EditorState.create({
-    doc: editorContent.value,
-    extensions: [
-      lineNumbers(),
-      history(),
-      keymap.of([...defaultKeymap, ...historyKeymap]),
-      markdown(),
-      EditorView.lineWrapping,
-      editorThemeCompartment.of(buildEditorTheme()),
-      EditorView.updateListener.of((update: ViewUpdate) => {
-        if (update.docChanged) {
-          updateEditor(update.state.doc.toString());
-        }
-      }),
-    ],
-  });
-
-  editorView = new EditorView({ state, parent: editorRoot.value });
-};
-
-watch(editorContent, (value) => {
-  if (!editorView) {
-    return;
-  }
-  const current = editorView.state.doc.toString();
-  if (current === value) {
-    return;
-  }
-  editorView.dispatch({ changes: { from: 0, to: current.length, insert: value } });
-});
-
 watch([documentTitle, editorContent], () => cacheDraft());
-watch(isDark, () => {
-  if (!editorView) {
-    return;
-  }
-  editorView.dispatch({
-    effects: editorThemeCompartment.reconfigure(buildEditorTheme()),
-  });
-});
 
 watch(paletteOpen, async (open) => {
   if (open) {
@@ -390,7 +593,9 @@ watch(paletteOpen, async (open) => {
 });
 
 useKeyboardShortcuts({
-  onSave: saveCurrentDocument,
+  onSave: async () => {
+    await saveCurrentDocument();
+  },
   onDelete: () => (isDeleteOpen.value = true),
   onRename: focusTitle,
   onToggleLayout: toggleLayout,
@@ -400,12 +605,14 @@ useKeyboardShortcuts({
 
 onMounted(async () => {
   hydrateTheme();
-  hydrateDraft();
+  await initializeAuth();
+  resetDraft(storageScope.value);
+  hydrateDraft(storageScope.value);
   await loadDocs();
-  mountEditor();
+  if (user.value) {
+    await loadLocalImportCandidates();
+  }
 });
-
-onBeforeUnmount(() => editorView?.destroy());
 </script>
 
 <template>
@@ -424,59 +631,27 @@ onBeforeUnmount(() => editorView?.destroy());
     </div>
 
     <div class="flex h-full w-full">
-      <aside
+      <DocumentLibrary
         v-if="!zenMode"
-        :class="[
-          'hidden h-full border-r transition-all duration-300 md:flex md:flex-col',
-          borderClass,
-          sidebarClass,
-          sidebarCollapsed ? 'w-16' : 'w-64'
-        ]"
-      >
-        <div :class="['flex h-12 items-center justify-between border-b px-3', borderClass]">
-          <button
-            :class="[controlClass, 'h-8 w-8 bg-zinc-800/30 p-0 text-zinc-400 hover:text-zinc-100']"
-            @click="sidebarCollapsed = !sidebarCollapsed"
-          >
-            <span class="sr-only">Toggle sidebar</span>
-            {{ sidebarCollapsed ? ">" : "<" }}
-          </button>
-          <button
-            v-if="!sidebarCollapsed"
-            :class="[controlClass, 'px-2 py-1 text-xs tracking-tight text-zinc-200']"
-            @click="resetDraft"
-          >
-            New
-          </button>
-        </div>
-
-        <div v-if="!sidebarCollapsed" class="flex h-full flex-col gap-3 px-3 py-3">
-          <input
-            v-model="searchQuery"
-            type="search"
-            placeholder="Find files..."
-            :class="[controlClass, 'px-3 py-2 text-sm placeholder:text-zinc-500']"
-          />
-          <div class="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-            <button
-              v-for="doc in filteredDocuments"
-              :key="doc.id"
-              :class="[sidebarItemClass, doc.id === activeDocumentId ? sidebarItemActiveClass : '']"
-              @click="setActiveDocument(doc.id)"
-            >
-              <span class="truncate tracking-tight">{{ doc.title }}</span>
-            </button>
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <button :class="[controlClass, 'px-2 py-2 text-xs text-zinc-300']" @click="switchTheme">
-              {{ themeMode === "dark" ? "Light" : "Dark" }}
-            </button>
-            <button :class="[controlClass, 'px-2 py-2 text-xs text-zinc-300']" @click="openPalette">
-              Cmd+K
-            </button>
-          </div>
-        </div>
-      </aside>
+        v-model:search-query="searchQuery"
+        v-model:collapsed="sidebarCollapsed"
+        :documents="filteredDocuments"
+        :active-document-id="activeDocumentId"
+        :theme-mode="themeMode"
+        :is-authenticated="Boolean(user)"
+        :has-local-documents="localDocuments.length > 0"
+        :border-class="borderClass"
+        :surface-class="sidebarClass"
+        :control-class="controlClass"
+        :item-class="sidebarItemClass"
+        :active-item-class="sidebarItemActiveClass"
+        :muted-text-class="mutedTextClass"
+        @create="newDocument"
+        @open="openDocument"
+        @theme="switchTheme"
+        @palette="openPalette"
+        @import="importDialogOpen = true"
+      />
 
       <main class="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header
@@ -528,8 +703,22 @@ onBeforeUnmount(() => editorView?.destroy());
               </button>
             </div>
             <button :class="[controlClass, 'px-3 py-1.5 text-xs text-zinc-300']" @click="toggleZen">Zen</button>
+            <button
+              v-if="user"
+              :disabled="!activeDocumentId || isDirty"
+              :class="[controlClass, 'px-3 py-1.5 text-xs text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40']"
+              :title="isDirty ? 'Save before sharing' : !activeDocumentId ? 'Save the document first' : 'Share the saved document by link'"
+              @click="openPublicationDialog"
+            >
+              Share
+            </button>
             <button :class="[controlClass, 'px-3 py-1.5 text-xs text-zinc-300']" @click="isDeleteOpen = true">Delete</button>
             <button :class="[controlClass, 'px-3 py-1.5 text-xs text-zinc-100']" @click="saveCurrentDocument">Save</button>
+            <AccountControls
+              :user="user"
+              @sign-out="requestSignOut"
+              @delete-account="deleteAccountOpen = true"
+            />
           </div>
         </header>
 
@@ -543,7 +732,11 @@ onBeforeUnmount(() => editorView?.destroy());
               layoutMode === 'editor' ? 'col-span-full' : ''
             ]"
           >
-            <div ref="editorRoot" class="h-full min-h-0 overflow-hidden" />
+            <MarkdownEditorPane
+              :model-value="editorContent"
+              :is-dark="isDark"
+              @update:model-value="updateEditor"
+            />
           </section>
 
           <section
@@ -603,7 +796,7 @@ onBeforeUnmount(() => editorView?.destroy());
             v-for="doc in filteredDocuments"
             :key="doc.id"
             :class="[sidebarItemClass, doc.id === activeDocumentId ? sidebarItemActiveClass : '']"
-            @click="setActiveDocument(doc.id); mobileSidebarOpen = false"
+            @click="openDocument(doc.id); mobileSidebarOpen = false"
           >
             <span class="truncate tracking-tight">{{ doc.title }}</span>
           </button>
@@ -686,10 +879,73 @@ onBeforeUnmount(() => editorView?.destroy());
             Cancel
           </button>
           <button :class="dangerButtonClass" @click="removeCurrentDocument">
-            Delete
+            Delete document
           </button>
         </div>
       </div>
+    </div>
+
+    <ImportDocumentsDialog
+      :open="importDialogOpen"
+      :documents="localDocuments"
+      :imported-ids="importedLocalIds"
+      :busy="importBusy"
+      @close="importDialogOpen = false"
+      @import="importSelectedDocuments"
+      @cleanup="cleanupImportedDocuments"
+    />
+
+    <PublicationDialog
+      :open="publicationDialogOpen"
+      :status="publicationStatus"
+      :busy="publicationBusy"
+      :has-remote-images="hasRemoteImages"
+      @close="publicationDialogOpen = false"
+      @publish="publishDocument"
+      @unpublish="unpublishDocument"
+      @copy="copyPublicationUrl"
+    />
+
+    <VersionConflictDialog
+      :document="conflictDocument"
+      @reload="reloadConflictVersion"
+      @download="downloadDraft"
+      @save-copy="saveConflictAsCopy"
+      @close="conflictDocument = null"
+    />
+
+    <div v-if="signOutDialogOpen" class="fixed inset-0 z-[90] grid place-items-center bg-black/70 px-4 backdrop-blur-xl">
+      <section class="w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900 p-5 text-zinc-100 shadow-2xl">
+        <h2 class="text-base font-semibold">Unsaved changes</h2>
+        <p class="mt-2 text-sm leading-6 text-zinc-400">Save or discard your changes before signing out.</p>
+        <div class="mt-5 grid gap-2">
+          <button class="rounded-md bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-950" @click="saveThenSignOut">Save and sign out</button>
+          <button class="rounded-md border border-rose-400/30 px-3 py-2 text-sm text-rose-300" @click="performSignOut(true)">Discard and sign out</button>
+          <button class="px-3 py-2 text-xs text-zinc-500" @click="signOutDialogOpen = false">Cancel</button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="deleteAccountOpen" class="fixed inset-0 z-[90] grid place-items-center bg-black/70 px-4 backdrop-blur-xl">
+      <section class="w-full max-w-md rounded-xl border border-rose-400/20 bg-zinc-900 p-5 text-zinc-100 shadow-2xl">
+        <h2 class="text-base font-semibold">Delete account permanently</h2>
+        <p class="mt-2 text-sm leading-6 text-zinc-400">
+          This permanently deletes your account, its documents, and all shared links. This action cannot be undone.
+        </p>
+        <label for="delete-confirmation" class="mt-4 block text-xs text-zinc-300">Type DELETE to confirm</label>
+        <input
+          id="delete-confirmation"
+          v-model="deleteConfirmation"
+          autocomplete="off"
+          class="mt-2 w-full rounded-md border border-white/10 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-rose-400/50"
+        />
+        <div class="mt-5 flex justify-end gap-2">
+          <button class="rounded-md border border-white/10 px-3 py-2 text-xs text-zinc-300" :disabled="accountBusy" @click="deleteAccountOpen = false; deleteConfirmation = ''">Cancel</button>
+          <button class="rounded-md bg-rose-500 px-3 py-2 text-xs font-medium text-white disabled:opacity-40" :disabled="accountBusy || deleteConfirmation !== 'DELETE'" @click="deleteAccount">
+            {{ accountBusy ? "Deleting…" : "Delete account" }}
+          </button>
+        </div>
+      </section>
     </div>
   </div>
 </template>

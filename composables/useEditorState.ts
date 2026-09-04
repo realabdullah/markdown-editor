@@ -1,4 +1,4 @@
-import type { MarkdownDoc } from "~/types";
+import type { DocumentDetail, DocumentSummary } from "~/types";
 
 const DEFAULT_TEMPLATE = `# Welcome to your editor
 
@@ -21,8 +21,9 @@ export type SortMode = "updated" | "name";
 export type PreviewStyle = "gfm" | "minimal";
 
 export const useEditorState = () => {
-  const documents = useState<MarkdownDoc[]>("documents", () => []);
+  const documents = useState<DocumentSummary[]>("documents", () => []);
   const activeDocumentId = useState<string>("activeDocumentId", () => "");
+  const activeDocumentVersion = useState<number>("activeDocumentVersion", () => 0);
   const editorContent = useState<string>("editorContent", () => DEFAULT_TEMPLATE);
   const documentTitle = useState<string>("documentTitle", () => "Untitled Document");
   const searchQuery = useState<string>("searchQuery", () => "");
@@ -80,11 +81,38 @@ export const useEditorState = () => {
     );
   };
 
-  const hydrateDraft = () => {
+  const draftScope = useState<string>("draftScope", () => "guest");
+  const draftDocumentId = useState<string>("draftDocumentId", () => "new");
+  let cacheTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const draftKey = (scope = draftScope.value, id = draftDocumentId.value) =>
+    `md-editor-draft:${scope}:${id || "new"}`;
+
+  const getCachedDraft = (scope: string, id: string) => {
+    if (!import.meta.client) {
+      return null;
+    }
+    const cached = localStorage.getItem(draftKey(scope, id));
+    if (!cached) {
+      return null;
+    }
+    try {
+      return JSON.parse(cached) as { title: string; content: string };
+    } catch {
+      return null;
+    }
+  };
+
+  const hydrateDraft = (scope: string, id = "new") => {
     if (!import.meta.client) {
       return;
     }
-    const cached = localStorage.getItem("md-editor-draft");
+    draftScope.value = scope;
+    draftDocumentId.value = id;
+    const legacyDraft = scope === "guest" && id === "new"
+      ? localStorage.getItem("md-editor-draft")
+      : null;
+    const cached = localStorage.getItem(draftKey(scope, id)) || legacyDraft;
     if (!cached) {
       return;
     }
@@ -92,6 +120,11 @@ export const useEditorState = () => {
       const payload = JSON.parse(cached) as { title: string; content: string };
       documentTitle.value = payload.title || "Untitled Document";
       editorContent.value = payload.content || DEFAULT_TEMPLATE;
+      isDirty.value = true;
+      if (legacyDraft) {
+        localStorage.setItem(draftKey(scope, id), legacyDraft);
+        localStorage.removeItem("md-editor-draft");
+      }
     } catch {
       editorContent.value = DEFAULT_TEMPLATE;
     }
@@ -101,30 +134,60 @@ export const useEditorState = () => {
     if (!import.meta.client) {
       return;
     }
-    localStorage.setItem(
-      "md-editor-draft",
-      JSON.stringify({
-        title: documentTitle.value,
-        content: editorContent.value,
-      }),
-    );
+    if (cacheTimer) {
+      clearTimeout(cacheTimer);
+    }
+    cacheTimer = setTimeout(() => {
+      localStorage.setItem(
+        draftKey(),
+        JSON.stringify({
+          title: documentTitle.value,
+          content: editorContent.value,
+        }),
+      );
+    }, 300);
   };
 
-  const makeDocId = () => crypto.randomUUID();
+  const clearDraft = (scope = draftScope.value, id = draftDocumentId.value) => {
+    if (import.meta.client) {
+      localStorage.removeItem(draftKey(scope, id));
+    }
+  };
 
-  const setActiveDocument = (id: string) => {
-    const doc = documents.value.find((item) => item.id === id);
-    if (!doc) {
+  const clearScopeDrafts = (scope: string) => {
+    if (!import.meta.client) {
       return;
     }
-    activeDocumentId.value = doc.id;
-    documentTitle.value = doc.title;
-    editorContent.value = doc.content;
-    isDirty.value = false;
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith(`md-editor-draft:${scope}:`))
+      .forEach((key) => localStorage.removeItem(key));
   };
 
-  const resetDraft = () => {
+  const setDraftContext = (scope: string, id: string) => {
+    draftScope.value = scope;
+    draftDocumentId.value = id || "new";
+  };
+
+  const setActiveDocument = (doc: DocumentDetail, scope: string) => {
+    activeDocumentId.value = doc.id;
+    activeDocumentVersion.value = doc.version;
+    setDraftContext(scope, doc.id);
+    const cached = getCachedDraft(scope, doc.id);
+    documentTitle.value = doc.title;
+    editorContent.value = doc.content;
+    if (cached) {
+      documentTitle.value = cached.title || doc.title;
+      editorContent.value = cached.content;
+      isDirty.value = cached.title !== doc.title || cached.content !== doc.content;
+    } else {
+      isDirty.value = false;
+    }
+  };
+
+  const resetDraft = (scope = draftScope.value) => {
     activeDocumentId.value = "";
+    activeDocumentVersion.value = 0;
+    setDraftContext(scope, "new");
     documentTitle.value = "Untitled Document";
     editorContent.value = DEFAULT_TEMPLATE;
     isDirty.value = false;
@@ -145,6 +208,7 @@ export const useEditorState = () => {
   return {
     documents,
     activeDocumentId,
+    activeDocumentVersion,
     documentTitle,
     editorContent,
     searchQuery,
@@ -161,7 +225,9 @@ export const useEditorState = () => {
     hydrateTheme,
     hydrateDraft,
     cacheDraft,
-    makeDocId,
+    clearDraft,
+    clearScopeDrafts,
+    setDraftContext,
     setActiveDocument,
     resetDraft,
     updateEditor,

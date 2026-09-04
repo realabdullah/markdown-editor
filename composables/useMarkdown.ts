@@ -1,25 +1,13 @@
-import MarkdownIt from "markdown-it";
-import DOMPurify from "dompurify";
 import type { PreviewStyle } from "./useEditorState";
-
-const parser = new MarkdownIt({
-  html: false,
-  breaks: true,
-  linkify: true,
-  typographer: true,
-});
+import { containsRemoteImages, renderMarkdown as renderSafeMarkdown } from "~/utils/markdown";
 
 export const useMarkdown = () => {
   const renderMarkdown = (source: string, style: PreviewStyle) => {
-    if (!import.meta.client) {
-      return "";
-    }
-    const html = parser.render(source);
-    const safeHtml = DOMPurify.sanitize(html);
+    const safeHtml = renderSafeMarkdown(source);
     return style === "minimal"
       ? safeHtml.replace(/<blockquote>/g, '<blockquote class="not-italic">')
       : safeHtml;
   };
 
-  return { renderMarkdown };
+  return { containsRemoteImages, renderMarkdown };
 };

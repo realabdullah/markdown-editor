@@ -1,4 +1,3 @@
 {
-  "buildCommand": "pnpm run generate",
-  "outputDirectory": ".output/public"
+  "buildCommand": "pnpm run build"
 }

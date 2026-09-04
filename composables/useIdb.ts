@@ -24,6 +24,7 @@ const toMarkdownDoc = (
     content: doc.content,
     createdAt,
     updatedAt,
+    version: doc.version || 1,
   };
 };
 
