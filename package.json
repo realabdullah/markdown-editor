@@ -2,7 +2,7 @@
   "name": "markdown-editor",
   "private": true,
   "engines": {
-    "node": ">=22.0.0"
+    "node": "22.x"
   },
   "scripts": {
     "build": "nuxt build",
@@ -37,7 +37,7 @@
     "@supabase/supabase-js": "2.115.0",
     "codemirror": "^6.0.1",
     "idb": "^7.1.1",
-    "isomorphic-dompurify": "4.1.0",
+    "isomorphic-dompurify": "2.22.0",
     "jspdf": "^3.0.1",
     "markdown-it": "^14.1.0",
     "reka-ui": "latest",
