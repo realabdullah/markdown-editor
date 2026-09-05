@@ -4,6 +4,7 @@ import type { WorkspaceDraft, WorkspaceViewMode } from "../../types/workspace";
 
 /** In-memory stand-in for the IndexedDB side of the workspace repository. */
 export const createMemoryAdapter = (handle: FileSystemDirectoryHandle) => {
+  let pickable = handle;
   let persisted: { id: string; handle: FileSystemDirectoryHandle } | null = null;
   let permission: PermissionState = "prompt";
   const drafts = new Map<string, WorkspaceDraft>();
@@ -16,8 +17,8 @@ export const createMemoryAdapter = (handle: FileSystemDirectoryHandle) => {
     `${workspaceId}:${source}:${documentId}`;
 
   const adapter: WorkspaceFileSystemAdapter = {
-    isSupported: () => true,
-    pickDirectory: async () => handle,
+    getSupport: () => "supported",
+    pickDirectory: async () => pickable,
     loadDirectory: async () => persisted,
     saveDirectory: async (workspace) => {
       persisted = workspace;
@@ -58,6 +59,9 @@ export const createMemoryAdapter = (handle: FileSystemDirectoryHandle) => {
 
   return {
     adapter,
+    setPickable: (next: FileSystemDirectoryHandle) => {
+      pickable = next;
+    },
     getPersisted: () => persisted,
     drafts,
     lastOpened,

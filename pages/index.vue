@@ -6,6 +6,7 @@ import type {
   WorkspaceFormatCommand,
   WorkspaceOutlineItem,
   WorkspaceSearchResult,
+  WorkspaceSupportStatus,
   WorkspaceViewMode,
 } from "~/types/workspace";
 
@@ -21,6 +22,7 @@ const {
   saveStatus,
   conflict,
   errorMessage,
+  isDisconnected,
   recoveredDraftPath,
   isDirty,
   indexedCount,
@@ -35,6 +37,7 @@ const {
   save,
   setEditorContent,
   restoreLastOpened,
+  reconnect,
   resolveConflictByReloading,
   resolveConflictByCopy,
   dismissConflict,
@@ -87,7 +90,8 @@ const previewPane = ref<{
 
 const isReady = ref(false);
 const isBusy = ref(false);
-const isSupported = ref(true);
+const supportStatus = ref<WorkspaceSupportStatus>("unknown");
+const secureUrl = ref("");
 const isSidebarOpen = ref(false);
 const openError = ref("");
 const legacyDocuments = ref<DocumentDetail[]>([]);
@@ -98,6 +102,40 @@ useSeoMeta({
   title: "Markdown Editor",
   description: "Edit Markdown files directly in a local folder.",
 });
+
+const isSupported = computed(() => supportStatus.value === "supported");
+
+const SUPPORT_NOTICES: Record<string, { eyebrow: string; title: string; body: string }> = {
+  "insecure-context": {
+    eyebrow: "Insecure connection",
+    title: "This page needs a secure connection",
+    body: "Browsers only let a page read and write a folder on your device over HTTPS. This page was served over plain HTTP, so that permission is withheld — no browser will allow it on this address.",
+  },
+  "embedded-frame": {
+    eyebrow: "Embedded page",
+    title: "Open this editor in its own tab",
+    body: "Folder access is blocked when the editor is embedded in a page from another site. Opening it directly at its own address restores it.",
+  },
+  "unsupported-browser": {
+    eyebrow: "Browser support",
+    title: "Open this workspace in Chrome or Edge",
+    body: "This editor needs permission to read and write a folder on your device. Safari and Firefox do not offer that permission, and some Chromium browsers — Brave, for one — keep it behind a flag that is off by default.",
+  },
+  "mobile-browser": {
+    eyebrow: "Desktop required",
+    title: "Open this workspace on a computer",
+    body: "No mobile browser can grant a page access to a folder on your device. Open this page in Chrome or Edge on a desktop to use your workspace.",
+  },
+  "no-storage": {
+    eyebrow: "Site data blocked",
+    title: "Allow site data for this page",
+    body: "The editor remembers which folder you opened by storing it in your browser. This browser is blocking storage for this site, which usually means private browsing or a cookie and site-data setting.",
+  },
+};
+
+const supportNotice = computed(
+  () => SUPPORT_NOTICES[supportStatus.value] ?? SUPPORT_NOTICES["unsupported-browser"]!,
+);
 
 const isDark = computed(() => themeMode.value === "dark");
 const assetPaths = computed(() => assets.value.map((asset) => asset.path));
@@ -154,11 +192,22 @@ const chooseFolder = async () => {
   openError.value = "";
   try {
     session.value = await repository.open();
+    isDisconnected.value = false;
     await loadWorkspace();
   } catch (error) {
     if ((error as DOMException).name !== "AbortError") {
       openError.value = "The folder could not be opened. Check its permissions and try again.";
     }
+  } finally {
+    isBusy.value = false;
+  }
+};
+
+const reconnectFolder = async () => {
+  isBusy.value = true;
+  try {
+    await reconnect();
+    if (!isDisconnected.value) await detectLegacyDocuments();
   } finally {
     isBusy.value = false;
   }
@@ -330,7 +379,10 @@ const downloadLegacyDocument = (document: DocumentDetail) => {
 };
 
 onMounted(async () => {
-  isSupported.value = repository.isSupported();
+  supportStatus.value = repository.getSupport();
+  if (supportStatus.value === "insecure-context") {
+    secureUrl.value = window.location.href.replace(/^http:/, "https:");
+  }
   if (isSupported.value) {
     watchViewport();
     await restoreViewMode();
@@ -369,13 +421,25 @@ onBeforeUnmount(() => {
       class="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-16"
     >
       <p class="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-        Browser compatibility
+        {{ supportNotice.eyebrow }}
       </p>
       <h1 class="text-3xl font-semibold tracking-tight">
-        Open this workspace in Chrome or Edge
+        {{ supportNotice.title }}
       </h1>
       <p class="mt-4 max-w-xl text-zinc-600 dark:text-zinc-400">
-        This editor needs permission to read and write a folder on your device. Safari and Firefox do not currently provide that access.
+        {{ supportNotice.body }}
+      </p>
+
+      <p
+        v-if="secureUrl"
+        class="mt-4 text-sm text-zinc-600 dark:text-zinc-400"
+      >
+        Try
+        <a
+          class="underline underline-offset-4 hover:text-zinc-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:hover:text-zinc-100"
+          :href="secureUrl"
+        >{{ secureUrl }}</a>
+        — if that address does not load, the site has no certificate yet and only whoever deployed it can fix this.
       </p>
 
       <div
@@ -625,8 +689,24 @@ onBeforeUnmount(() => {
             Recovered unsaved changes from your last session. Save to write them to disk.
           </p>
 
+          <div
+            v-if="isDisconnected"
+            class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"
+            role="alert"
+          >
+            <p>{{ errorMessage }}</p>
+            <button
+              class="shrink-0 rounded-md border border-amber-500 px-3 py-1.5 text-sm font-medium hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 disabled:opacity-50 dark:border-amber-700 dark:hover:bg-amber-900/40"
+              type="button"
+              :disabled="isBusy"
+              @click="reconnectFolder"
+            >
+              Reconnect folder
+            </button>
+          </div>
+
           <p
-            v-if="errorMessage || openError"
+            v-else-if="errorMessage || openError"
             class="border-b border-red-300 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200"
             role="alert"
           >

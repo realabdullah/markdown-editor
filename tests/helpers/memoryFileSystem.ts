@@ -41,12 +41,19 @@ export class MemoryFileHandle {
 export class MemoryDirectoryHandle {
   readonly kind = "directory" as const;
   readonly children = new Map<string, MemoryDirectoryHandle | MemoryFileHandle>();
+  private isDetached = false;
 
   constructor(readonly name: string) {}
+
+  /** Stands in for a folder renamed or moved out from under its handle. */
+  detach = () => {
+    this.isDetached = true;
+  };
 
   async *entries(): AsyncIterableIterator<
     [string, MemoryDirectoryHandle | MemoryFileHandle]
   > {
+    if (this.isDetached) throw notFound(this.name);
     for (const entry of this.children) {
       yield entry;
     }
@@ -56,6 +63,7 @@ export class MemoryDirectoryHandle {
     name: string,
     options: { create?: boolean } = {},
   ): Promise<MemoryDirectoryHandle> => {
+    if (this.isDetached) throw notFound(this.name);
     const existing = this.children.get(name);
     if (existing instanceof MemoryDirectoryHandle) return existing;
     if (existing || !options.create) throw notFound(name);
@@ -69,6 +77,7 @@ export class MemoryDirectoryHandle {
     name: string,
     options: { create?: boolean } = {},
   ): Promise<MemoryFileHandle> => {
+    if (this.isDetached) throw notFound(this.name);
     const existing = this.children.get(name);
     if (existing instanceof MemoryFileHandle) return existing;
     if (existing || !options.create) throw notFound(name);

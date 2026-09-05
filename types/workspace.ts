@@ -69,6 +69,7 @@ export interface WorkspaceDraft {
 export interface WorkspaceRepository {
   open: () => Promise<WorkspaceSession>;
   restore: (requestPermission?: boolean) => Promise<WorkspaceSession | null>;
+  reconnect: () => Promise<WorkspaceSession>;
   scan: (session: WorkspaceSession) => Promise<WorkspaceScanResult>;
   read: (session: WorkspaceSession, path: string) => Promise<WorkspaceDocument>;
   create: (
@@ -88,13 +89,23 @@ export interface WorkspaceRepository {
 
 export type WorkspaceSessionRepository = Pick<
   WorkspaceRepository,
-  "open" | "restore"
+  "open" | "restore" | "reconnect"
 >;
 
 export const isWorkspaceConflict = (
   result: WorkspaceDocument | WorkspaceConflict,
 ): result is WorkspaceConflict =>
   (result as WorkspaceConflict).kind === "conflict";
+
+/** Why a workspace cannot be opened. Each value has a different remedy. */
+export type WorkspaceSupportStatus =
+  | "supported"
+  | "unknown"
+  | "insecure-context"
+  | "embedded-frame"
+  | "unsupported-browser"
+  | "mobile-browser"
+  | "no-storage";
 
 export type WorkspaceSaveStatus =
   | "idle"

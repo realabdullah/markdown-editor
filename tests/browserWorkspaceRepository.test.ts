@@ -3,6 +3,8 @@ import { BrowserWorkspaceRepository } from "../repositories/browserWorkspaceRepo
 import {
   WorkspaceBaselineChangedError,
   WorkspaceFileExistsError,
+  WorkspaceFileMissingError,
+  WorkspaceRootMissingError,
 } from "../repositories/workspaceErrors";
 import { hashContent } from "../repositories/workspacePaths";
 import {
@@ -206,5 +208,61 @@ describe("BrowserWorkspaceRepository files", () => {
       "README.md",
       "docs/guide.md",
     ]);
+  });
+});
+
+describe("BrowserWorkspaceRepository folders that move on disk", () => {
+  const build = async () => {
+    const created = createMemoryDirectory({ "new-note.md": "# Note\n" }, "notes");
+    await created.ready;
+    const memory = createMemoryAdapter(asDirectoryHandle(created.root));
+    const repository = new BrowserWorkspaceRepository(memory.adapter);
+    const session = await repository.open();
+    return { root: created.root, memory, repository, session };
+  };
+
+  it("reports a renamed workspace folder rather than a failed file read", async () => {
+    const { root, repository, session } = await build();
+    root.detach();
+
+    await expect(repository.read(session, "new-note.md")).rejects.toBeInstanceOf(
+      WorkspaceRootMissingError,
+    );
+    await expect(repository.scan(session)).rejects.toBeInstanceOf(
+      WorkspaceRootMissingError,
+    );
+  });
+
+  it("reports a missing file when the folder itself is intact", async () => {
+    const { root, repository, session } = await build();
+    root.children.delete("new-note.md");
+
+    await expect(repository.read(session, "new-note.md")).rejects.toBeInstanceOf(
+      WorkspaceFileMissingError,
+    );
+  });
+
+  it("keeps the workspace id when reconnecting, so drafts survive", async () => {
+    const { root, memory, repository, session } = await build();
+    await repository.saveDraft({
+      workspaceId: session.id,
+      path: "new-note.md",
+      content: "unsaved text",
+      baselineHash: await hashContent("# Note\n"),
+      updatedAt: Date.now(),
+    });
+    root.detach();
+
+    const renamed = createMemoryDirectory({ "new-note.md": "# Note\n" }, "notes-2025");
+    await renamed.ready;
+    memory.setPickable(asDirectoryHandle(renamed.root));
+    const reconnected = await repository.reconnect();
+
+    expect(reconnected.id).toBe(session.id);
+    expect(reconnected.directoryName).toBe("notes-2025");
+    expect(
+      (await repository.loadDraft(reconnected.id, "new-note.md"))?.content,
+    ).toBe("unsaved text");
+    expect((await repository.read(reconnected, "new-note.md")).content).toBe("# Note\n");
   });
 });

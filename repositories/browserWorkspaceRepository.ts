@@ -2,10 +2,17 @@ import { openDB, type IDBPDatabase } from "idb";
 import {
   WorkspaceBaselineChangedError,
   WorkspaceFileExistsError,
+  WorkspaceFileMissingError,
+  WorkspaceRootMissingError,
   WorkspaceWriteVerificationError,
+  isMissingEntryError,
 } from "./workspaceErrors";
 import { hashContent, toConflictPath } from "./workspacePaths";
 import { scanWorkspace } from "./workspaceScanner";
+import {
+  readWorkspaceEnvironment,
+  resolveWorkspaceSupport,
+} from "./workspaceSupport";
 import type {
   MigrationMarker,
   MigrationSource,
@@ -18,6 +25,7 @@ import type {
   WorkspaceRepository,
   WorkspaceScanResult,
   WorkspaceSession,
+  WorkspaceSupportStatus,
   WorkspaceViewMode,
 } from "~/types/workspace";
 
@@ -37,7 +45,7 @@ interface PersistedWorkspace {
 }
 
 export interface WorkspaceFileSystemAdapter {
-  isSupported: () => boolean;
+  getSupport: () => WorkspaceSupportStatus;
   pickDirectory: () => Promise<FileSystemDirectoryHandle>;
   loadDirectory: () => Promise<PersistedWorkspace | null>;
   saveDirectory: (workspace: PersistedWorkspace) => Promise<void>;
@@ -125,7 +133,10 @@ const openWorkspaceDb = (): Promise<IDBPDatabase> => {
 };
 
 export const browserWorkspaceFileSystem: WorkspaceFileSystemAdapter = {
-  isSupported: () => import.meta.client && "showDirectoryPicker" in window,
+  getSupport: () =>
+    import.meta.client
+      ? resolveWorkspaceSupport(readWorkspaceEnvironment())
+      : "unknown",
   pickDirectory: () => window.showDirectoryPicker({ mode: "readwrite" }),
   loadDirectory: async () => {
     const db = await openWorkspaceDb();
@@ -197,7 +208,7 @@ export class BrowserWorkspaceRepository implements WorkspaceRepository {
     private readonly fileSystem: WorkspaceFileSystemAdapter = browserWorkspaceFileSystem,
   ) {}
 
-  isSupported = () => this.fileSystem.isSupported();
+  getSupport = () => this.fileSystem.getSupport();
 
   open = async (): Promise<WorkspaceSession> => {
     const handle = await this.fileSystem.pickDirectory();
@@ -221,8 +232,29 @@ export class BrowserWorkspaceRepository implements WorkspaceRepository {
     return this.toSession(workspace, permission);
   };
 
-  scan = (session: WorkspaceSession): Promise<WorkspaceScanResult> =>
-    scanWorkspace(session.directoryHandle);
+  /**
+   * Rebinds the workspace to a folder the user picks again. The id is reused so
+   * recovery drafts, the last-opened file, and migration markers stay attached
+   * rather than being orphaned under a fresh workspace.
+   */
+  reconnect = async (): Promise<WorkspaceSession> => {
+    const previous = await this.fileSystem.loadDirectory();
+    const handle = await this.fileSystem.pickDirectory();
+    const workspace = { id: previous?.id ?? crypto.randomUUID(), handle };
+    await this.fileSystem.saveDirectory(workspace);
+    return this.toSession(
+      workspace,
+      await this.fileSystem.getPermission(handle, false),
+    );
+  };
+
+  scan = async (session: WorkspaceSession): Promise<WorkspaceScanResult> => {
+    try {
+      return await scanWorkspace(session.directoryHandle);
+    } catch (error) {
+      throw await this.toMissingError(session, "", error);
+    }
+  };
 
   /** Reads an image asset so the preview can show it without copying it. */
   readAsset = async (session: WorkspaceSession, path: string): Promise<File> =>
@@ -375,9 +407,38 @@ export class BrowserWorkspaceRepository implements WorkspaceRepository {
     try {
       await this.resolveFile(session, path);
       return true;
-    } catch {
+    } catch (error) {
+      // A vanished root is not an answer about the path; it must not read as
+      // "absent", or a create would follow and fail on the same stale handle.
+      if (error instanceof WorkspaceRootMissingError) throw error;
       return false;
     }
+  };
+
+  /** One entry settles whether the root handle still resolves. */
+  private isRootAvailable = async (session: WorkspaceSession) => {
+    try {
+      await session.directoryHandle.entries().next();
+      return true;
+    } catch (error) {
+      return !isMissingEntryError(error);
+    }
+  };
+
+  /**
+   * `NotFoundError` says something along the path is gone but not what, and a
+   * stranded workspace and a deleted file need different repairs.
+   */
+  private toMissingError = async (
+    session: WorkspaceSession,
+    path: string,
+    error: unknown,
+  ): Promise<unknown> => {
+    if (!isMissingEntryError(error)) return error;
+    if (!(await this.isRootAvailable(session))) {
+      return new WorkspaceRootMissingError(session.directoryName);
+    }
+    return path ? new WorkspaceFileMissingError(path) : error;
   };
 
   private resolveFile = async (
@@ -391,11 +452,15 @@ export class BrowserWorkspaceRepository implements WorkspaceRepository {
       throw new TypeError(`"${path}" is not a workspace file path.`);
     }
 
-    let directory = session.directoryHandle;
-    for (const segment of segments) {
-      directory = await directory.getDirectoryHandle(segment, { create });
+    try {
+      let directory = session.directoryHandle;
+      for (const segment of segments) {
+        directory = await directory.getDirectoryHandle(segment, { create });
+      }
+      return await directory.getFileHandle(name, { create });
+    } catch (error) {
+      throw await this.toMissingError(session, path, error);
     }
-    return directory.getFileHandle(name, { create });
   };
 
   private writeFile = async (handle: FileSystemFileHandle, content: string) => {

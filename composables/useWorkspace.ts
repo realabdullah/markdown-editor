@@ -1,4 +1,8 @@
-import { isPermissionError } from "~/repositories/workspaceErrors";
+import {
+  WorkspaceFileMissingError,
+  WorkspaceRootMissingError,
+  isPermissionError,
+} from "~/repositories/workspaceErrors";
 import { workspaceSearchIndex } from "~/repositories/workspaceIndex";
 import { fileNameOf, toMarkdownPath } from "~/repositories/workspacePaths";
 import { buildWorkspaceTree } from "~/repositories/workspaceScanner";
@@ -33,6 +37,9 @@ export const useWorkspace = () => {
   const saveStatus = useState<WorkspaceSaveStatus>("workspaceSaveStatus", () => "idle");
   const conflict = useState<WorkspaceConflict | null>("workspaceConflict", () => null);
   const errorMessage = useState<string>("workspaceError", () => "");
+  /** The folder's handle no longer resolves; only reconnecting clears this. */
+  const isDisconnected = useState<boolean>("workspaceDisconnected", () => false);
+  const isFileMissing = useState<boolean>("workspaceFileMissing", () => false);
   const recoveredDraftPath = useState<string>("workspaceRecoveredDraft", () => "");
   const cursor = useState<WorkspaceCursorPosition>("workspaceCursor", () => ({
     line: 1,
@@ -42,7 +49,9 @@ export const useWorkspace = () => {
 
   const tree = computed(() => buildWorkspaceTree(files.value));
   const isDirty = computed(
-    () => !!document.value && editorContent.value !== document.value.content,
+    () =>
+      !!document.value &&
+      (isFileMissing.value || editorContent.value !== document.value.content),
   );
   const indexedCount = computed(
     () => files.value.filter((file) => file.indexStatus === "indexed").length,
@@ -86,6 +95,12 @@ export const useWorkspace = () => {
   let scanGeneration = 0;
 
   const reportError = (error: unknown, fallback: string) => {
+    if (error instanceof WorkspaceRootMissingError) {
+      isDisconnected.value = true;
+      errorMessage.value = `${error.directoryName} was renamed, moved, or removed, so the editor lost its link to it. Reconnect the folder to carry on — anything unsaved is kept here.`;
+      return;
+    }
+
     errorMessage.value = isPermissionError(error)
       ? "Folder access was denied. Reopen the workspace to continue."
       : fallback;
@@ -207,6 +222,7 @@ export const useWorkspace = () => {
 
       document.value = opened;
       editorContent.value = opened.content;
+      isFileMissing.value = false;
       saveStatus.value = "saved";
 
       if (draft && draft.content !== opened.content) {
@@ -244,6 +260,7 @@ export const useWorkspace = () => {
       await scan();
       document.value = created;
       editorContent.value = created.content;
+      isFileMissing.value = false;
       saveStatus.value = "saved";
       await repository.saveLastOpened(active.id, path);
     } catch (error) {
@@ -281,13 +298,38 @@ export const useWorkspace = () => {
 
       document.value = saved;
       editorContent.value = saved.content;
+      isFileMissing.value = false;
       saveStatus.value = "saved";
       workspaceSearchIndex.set(saved.path, saved.content);
       await repository.clearDraft(active.id, saved.path);
       await scan();
     } catch (error) {
+      if (error instanceof WorkspaceFileMissingError) {
+        await saveOverMissingFile(current.path);
+        return;
+      }
       saveStatus.value = "failed";
       reportError(error, `${current.path} could not be saved. Your text is kept here.`);
+    }
+  };
+
+  /** Recreating the file is the only route that does not discard the buffer. */
+  const saveOverMissingFile = async (path: string) => {
+    const active = session.value;
+    if (!active) return;
+
+    try {
+      const created = await repository.create(active, path, editorContent.value);
+      document.value = created;
+      editorContent.value = created.content;
+      isFileMissing.value = false;
+      saveStatus.value = "saved";
+      workspaceSearchIndex.set(created.path, created.content);
+      await repository.clearDraft(active.id, created.path);
+      await scan();
+    } catch (error) {
+      saveStatus.value = "failed";
+      reportError(error, `${path} could not be saved. Your text is kept here.`);
     }
   };
 
@@ -304,6 +346,8 @@ export const useWorkspace = () => {
         isDirty: isDirty.value,
       });
 
+      isFileMissing.value = false;
+
       if (isWorkspaceConflict(result)) {
         conflict.value = result;
         saveStatus.value = "changed-externally";
@@ -318,7 +362,47 @@ export const useWorkspace = () => {
         document.value = { ...current, diskMetadata: result.diskMetadata };
       }
     } catch (error) {
+      if (error instanceof WorkspaceFileMissingError) {
+        isFileMissing.value = true;
+        saveStatus.value = "unsaved";
+        errorMessage.value = `${current.path} is no longer on disk. Saving writes your text back to that path.`;
+        return;
+      }
       reportError(error, `${current.path} could not be reread from disk.`);
+    }
+  };
+
+  /**
+   * The buffer wins over disk here: it holds the only copy of what the user
+   * could not save while the folder was missing.
+   */
+  const reconnect = async () => {
+    const pending = editorContent.value;
+    const path = document.value?.path ?? "";
+
+    try {
+      session.value = await repository.reconnect();
+      isDisconnected.value = false;
+      errorMessage.value = "";
+      await scan();
+      if (!path || isDisconnected.value) return;
+
+      try {
+        const reopened = await repository.read(session.value, path);
+        document.value = reopened;
+        editorContent.value = pending;
+        isFileMissing.value = false;
+        saveStatus.value = pending === reopened.content ? "saved" : "unsaved";
+      } catch (error) {
+        if (!(error instanceof WorkspaceFileMissingError)) throw error;
+        isFileMissing.value = true;
+        saveStatus.value = "unsaved";
+        errorMessage.value = `${path} is not in this folder. Saving creates it here.`;
+      }
+      await persistDraft();
+    } catch (error) {
+      if ((error as DOMException | null)?.name === "AbortError") return;
+      reportError(error, "The folder could not be reconnected.");
     }
   };
 
@@ -330,6 +414,7 @@ export const useWorkspace = () => {
     const disk = await repository.read(active, current.path);
     document.value = disk;
     editorContent.value = disk.content;
+    isFileMissing.value = false;
     conflict.value = null;
     saveStatus.value = "saved";
     await repository.clearDraft(active.id, current.path);
@@ -346,6 +431,7 @@ export const useWorkspace = () => {
       conflict.value = null;
       document.value = copy;
       editorContent.value = copy.content;
+      isFileMissing.value = false;
       saveStatus.value = "saved";
       await repository.saveLastOpened(active.id, copy.path);
       await scan();
@@ -370,6 +456,8 @@ export const useWorkspace = () => {
 
   const onWindowFocus = async () => {
     if (!session.value || session.value.permissionState !== "granted") return;
+    // Rescanning a folder that is gone only rewrites the same banner.
+    if (isDisconnected.value) return;
     await scan();
     await refreshActiveDocument();
   };
@@ -390,6 +478,7 @@ export const useWorkspace = () => {
     saveStatus,
     conflict,
     errorMessage,
+    isDisconnected,
     recoveredDraftPath,
     isDirty,
     indexedCount,
@@ -405,6 +494,7 @@ export const useWorkspace = () => {
     setEditorContent,
     refreshActiveDocument,
     restoreLastOpened,
+    reconnect,
     resolveConflictByReloading,
     resolveConflictByCopy,
     dismissConflict,
