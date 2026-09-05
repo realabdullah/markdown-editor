@@ -24,9 +24,9 @@ const {
   isDeleteOpen,
   filteredDocuments,
   applyTheme,
-  hydrateTheme,
   hydrateDraft,
   cacheDraft,
+  flushDraft,
   clearDraft,
   clearScopeDrafts,
   setDraftContext,
@@ -36,7 +36,7 @@ const {
   updateTitle,
 } = useEditorState();
 
-const { user, initialize: initializeAuth, signOut } = useAuth();
+const { user, isAuthReady, initialize: initializeAuth, signOut } = useAuth();
 const { repository, localDocs, importLocalDocument } = useDocumentRepository();
 const { containsRemoteImages, renderMarkdown } = useMarkdown();
 const { toasts, push: pushToast, dismiss } = useToasts();
@@ -45,6 +45,10 @@ const titleInput = ref<HTMLInputElement | null>(null);
 const paletteInput = ref<HTMLInputElement | null>(null);
 const previewRoot = ref<HTMLElement | null>(null);
 const isDraggingFile = ref(false);
+const isSaving = ref(false);
+const publicationUrlCopied = ref(false);
+const titleBeforeEdit = ref("");
+const wasDirtyBeforeTitleEdit = ref(false);
 const sidebarCollapsed = ref(false);
 const mobileSidebarOpen = ref(false);
 const paletteOpen = ref(false);
@@ -61,6 +65,16 @@ const signOutDialogOpen = ref(false);
 const deleteAccountOpen = ref(false);
 const deleteConfirmation = ref("");
 const accountBusy = ref(false);
+
+const documentLoadError = ref<{ message: string; requiresSignIn: boolean } | null>(null);
+const isLoadingDocuments = ref(false);
+let documentLoadRequest = 0;
+let dragDepth = 0;
+let copyFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+let scopeRevision = 0;
+let editorReady = false;
+const isCurrentScope = (revision: number) => revision === scopeRevision;
 
 const storageScope = computed(() => user.value ? `user:${user.value.id}` : "guest");
 const importedIdsKey = computed(() =>
@@ -149,6 +163,9 @@ const asPdfFilename = (title: string) => `${normalizeTitle(title)}.pdf`;
 
 const renderedHtml = computed(() => renderMarkdown(editorContent.value, previewStyle.value));
 const hasRemoteImages = computed(() => containsRemoteImages(editorContent.value));
+const hasLocalDocumentsToImport = computed(() =>
+  localDocuments.value.some((document) => !importedLocalIds.value.includes(document.id)),
+);
 
 const paletteResults = computed(() => {
   const q = paletteQuery.value.trim().toLowerCase();
@@ -183,15 +200,42 @@ const getUserFacingError = (error: unknown, fallback: string) => {
 };
 
 const loadDocs = async () => {
+  const revision = scopeRevision;
+  const request = ++documentLoadRequest;
+  const isCurrentRequest = () => isCurrentScope(revision) && request === documentLoadRequest;
+  isLoadingDocuments.value = true;
   try {
-    documents.value = await repository.value.list();
+    const loaded = await repository.value.list();
+    if (!isCurrentRequest()) return;
+    documents.value = loaded;
+    documentLoadError.value = null;
   } catch (error) {
-    pushToast(getUserFacingError(error, "Unable to load documents. Try again."), "error");
+    if (!isCurrentRequest()) return;
+    const status = (error as { statusCode?: number; status?: number })?.statusCode
+      ?? (error as { status?: number })?.status;
+    const requiresSignIn = status === 401
+      || getApiError(error)?.data?.code === "AUTHENTICATION_REQUIRED";
+    documentLoadError.value = {
+      requiresSignIn,
+      message: requiresSignIn
+        ? "We couldn’t access your saved documents. Sign in again to reload them."
+        : getUserFacingError(error, "Unable to load your documents. Check your connection and try again."),
+    };
+  } finally {
+    if (isCurrentRequest()) isLoadingDocuments.value = false;
   }
 };
 
+const signInAgain = () => {
+  flushDraft();
+  return navigateTo("/login?reauthenticate=1");
+};
+
 const saveCurrentDocument = async () => {
+  if (isSaving.value) return false;
+  const revision = scopeRevision;
   const previousDraftId = activeDocumentId.value || "new";
+  isSaving.value = true;
   try {
     const input = {
       title: normalizeTitle(documentTitle.value),
@@ -204,13 +248,16 @@ const saveCurrentDocument = async () => {
         })
       : await repository.value.create(input);
 
+    if (!isCurrentScope(revision)) return false;
     clearDraft(storageScope.value, previousDraftId);
     setActiveDocument(saved, storageScope.value);
     isDirty.value = false;
     await loadDocs();
+    if (!isCurrentScope(revision)) return false;
     pushToast("Document saved", "success");
     return true;
   } catch (error) {
+    if (!isCurrentScope(revision)) return false;
     const apiError = getApiError(error);
     if (apiError?.data?.code === "VERSION_CONFLICT" && apiError.data.currentDocument) {
       conflictDocument.value = apiError.data.currentDocument;
@@ -218,10 +265,13 @@ const saveCurrentDocument = async () => {
       pushToast(getUserFacingError(error, "Unable to save the document. Try again."), "error");
     }
     return false;
+  } finally {
+    if (isCurrentScope(revision)) isSaving.value = false;
   }
 };
 
 const removeCurrentDocument = async () => {
+  const revision = scopeRevision;
   if (!activeDocumentId.value) {
     clearDraft(storageScope.value, "new");
     resetDraft(storageScope.value);
@@ -232,12 +282,15 @@ const removeCurrentDocument = async () => {
 
   try {
     await repository.value.remove(activeDocumentId.value);
+    if (!isCurrentScope(revision)) return;
     clearDraft(storageScope.value, activeDocumentId.value);
     resetDraft(storageScope.value);
     await loadDocs();
+    if (!isCurrentScope(revision)) return;
     isDeleteOpen.value = false;
     pushToast("Document deleted", "success");
   } catch (error) {
+    if (!isCurrentScope(revision)) return;
     pushToast(getUserFacingError(error, "Unable to delete the document. Try again."), "error");
   }
 };
@@ -245,10 +298,13 @@ const removeCurrentDocument = async () => {
 const newDocument = () => resetDraft(storageScope.value);
 
 const openDocument = async (id: string) => {
+  const revision = scopeRevision;
   try {
     const document = await repository.value.get(id);
+    if (!isCurrentScope(revision)) return;
     setActiveDocument(document, storageScope.value);
   } catch (error) {
+    if (!isCurrentScope(revision)) return;
     pushToast(getUserFacingError(error, "Unable to open the document. Try again."), "error");
   }
 };
@@ -279,6 +335,22 @@ const toggleZen = () => {
 const focusTitle = () => {
   titleInput.value?.focus();
   titleInput.value?.select();
+};
+
+const startTitleEditing = () => {
+  titleBeforeEdit.value = documentTitle.value;
+  wasDirtyBeforeTitleEdit.value = isDirty.value;
+};
+
+const finishTitleEditing = () => {
+  const normalized = normalizeTitle(documentTitle.value);
+  if (normalized !== documentTitle.value) updateTitle(normalized);
+};
+
+const cancelTitleEditing = () => {
+  documentTitle.value = titleBeforeEdit.value;
+  isDirty.value = wasDirtyBeforeTitleEdit.value;
+  titleInput.value?.blur();
 };
 
 const openPalette = async () => {
@@ -363,7 +435,10 @@ const loadLocalImportCandidates = async () => {
   if (!user.value) {
     return;
   }
-  localDocuments.value = await localDocs.getDocs();
+  const revision = scopeRevision;
+  const candidates = await localDocs.getDocs();
+  if (!isCurrentScope(revision)) return;
+  localDocuments.value = candidates;
   const stored = localStorage.getItem(importedIdsKey.value);
   try {
     const parsed = stored ? JSON.parse(stored) : [];
@@ -379,11 +454,16 @@ const loadLocalImportCandidates = async () => {
 };
 
 const importSelectedDocuments = async (ids: string[]) => {
+  if (importBusy.value || !user.value) return;
+  const revision = scopeRevision;
+  const markerKey = importedIdsKey.value;
   importBusy.value = true;
   let imported = 0;
   let failed = 0;
   try {
-    for (const id of ids) {
+    for (const id of [...new Set(ids)]) {
+      if (!isCurrentScope(revision)) return;
+      if (importedLocalIds.value.includes(id)) continue;
       const document = localDocuments.value.find((item) => item.id === id);
       if (!document) {
         continue;
@@ -395,80 +475,102 @@ const importSelectedDocuments = async (ids: string[]) => {
           content: document.content,
           createdAt: document.createdAt,
         });
+        if (!isCurrentScope(revision)) return;
         if (persisted.title !== document.title || persisted.content !== document.content) {
           throw new Error("The imported document could not be verified");
         }
         if (!importedLocalIds.value.includes(id)) {
           importedLocalIds.value.push(id);
         }
-        localStorage.setItem(importedIdsKey.value, JSON.stringify(importedLocalIds.value));
+        localStorage.setItem(markerKey, JSON.stringify(importedLocalIds.value));
         imported += 1;
       } catch {
         failed += 1;
       }
     }
+    if (!isCurrentScope(revision)) return;
     await loadDocs();
+    if (!isCurrentScope(revision)) return;
     if (failed) {
       const remaining = failed === 1
         ? "1 document is still available on this device."
         : `${failed} documents are still available on this device.`;
       pushToast(`${imported} added to your account. ${remaining}`, "error");
     } else {
+      importDialogOpen.value = false;
       pushToast(`${imported} ${imported === 1 ? "document" : "documents"} added to your account`, "success");
     }
   } finally {
-    importBusy.value = false;
+    if (isCurrentScope(revision)) importBusy.value = false;
   }
 };
 
 const cleanupImportedDocuments = async (ids: string[]) => {
-  if (!window.confirm("Remove these documents from this device? They will remain in your account.")) {
-    return;
-  }
+  if (importBusy.value || !user.value) return;
+  if (!window.confirm("Remove these documents from this device? They will remain in your account.")) return;
+  const revision = scopeRevision;
+  const verifiedIds = ids.filter((id) => importedLocalIds.value.includes(id));
   importBusy.value = true;
-  await Promise.all(ids.map((id) => localDocs.deleteDoc(id)));
-  localDocuments.value = await localDocs.getDocs();
-  importBusy.value = false;
-  pushToast("Documents removed from this device", "success");
+  try {
+    await Promise.all(verifiedIds.map((id) => localDocs.deleteDoc(id)));
+    const remaining = await localDocs.getDocs();
+    if (!isCurrentScope(revision)) return;
+    localDocuments.value = remaining;
+    pushToast("Documents removed from this device", "success");
+  } catch {
+    if (isCurrentScope(revision)) pushToast("Unable to remove documents from this device. Try again.", "error");
+  } finally {
+    if (isCurrentScope(revision)) importBusy.value = false;
+  }
 };
 
 const openPublicationDialog = async () => {
+  const revision = scopeRevision;
   if (!user.value || !activeDocumentId.value || isDirty.value) {
     return;
   }
   publicationBusy.value = true;
   publicationDialogOpen.value = true;
   try {
-    publicationStatus.value = await $fetch<PublicationStatus>(
+    const status = await $fetch<PublicationStatus>(
       `/api/documents/${activeDocumentId.value}/publication`,
     );
+    if (!isCurrentScope(revision)) return;
+    publicationStatus.value = status;
   } catch (error) {
+    if (!isCurrentScope(revision)) return;
     pushToast(getUserFacingError(error, "Unable to load sharing options. Try again."), "error");
     publicationDialogOpen.value = false;
   } finally {
-    publicationBusy.value = false;
+    if (isCurrentScope(revision)) publicationBusy.value = false;
   }
 };
 
 const publishDocument = async () => {
+  const revision = scopeRevision;
   publicationBusy.value = true;
   try {
-    publicationStatus.value = await $fetch<PublicationStatus>(
+    const status = await $fetch<PublicationStatus>(
       `/api/documents/${activeDocumentId.value}/publication`,
       { method: "PUT", body: { expectedVersion: activeDocumentVersion.value } },
     );
+    if (!isCurrentScope(revision)) return;
+    publicationStatus.value = status;
     pushToast("Document shared", "success");
   } catch (error) {
+    if (!isCurrentScope(revision)) return;
     pushToast(getUserFacingError(error, "Unable to share the document. Try again."), "error");
   } finally {
-    publicationBusy.value = false;
+    if (isCurrentScope(revision)) publicationBusy.value = false;
   }
 };
 
 const unpublishDocument = async () => {
+  const revision = scopeRevision;
   publicationBusy.value = true;
   try {
     await $fetch(`/api/documents/${activeDocumentId.value}/publication`, { method: "DELETE" });
+    if (!isCurrentScope(revision)) return;
     publicationStatus.value = {
       isPublished: false,
       publicToken: null,
@@ -478,16 +580,23 @@ const unpublishDocument = async () => {
     };
     pushToast("Shared link disabled", "success");
   } catch (error) {
+    if (!isCurrentScope(revision)) return;
     pushToast(getUserFacingError(error, "Unable to disable the link. Try again."), "error");
   } finally {
-    publicationBusy.value = false;
+    if (isCurrentScope(revision)) publicationBusy.value = false;
   }
 };
 
 const copyPublicationUrl = async () => {
-  if (publicationStatus.value?.publicUrl) {
+  if (!publicationStatus.value?.publicUrl) return;
+  try {
     await navigator.clipboard.writeText(publicationStatus.value.publicUrl);
+    publicationUrlCopied.value = true;
+    if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer);
+    copyFeedbackTimer = setTimeout(() => (publicationUrlCopied.value = false), 2000);
     pushToast("Link copied", "success");
+  } catch {
+    pushToast("Unable to copy the link", "error");
   }
 };
 
@@ -495,13 +604,11 @@ const performSignOut = async (discardDraft = false) => {
   const scope = storageScope.value;
   if (discardDraft) {
     clearDraft(scope, activeDocumentId.value || "new");
+    isDirty.value = false;
   }
   try {
     await signOut();
     clearScopeDrafts(scope);
-    resetDraft("guest");
-    hydrateDraft("guest");
-    await loadDocs();
     signOutDialogOpen.value = false;
     pushToast("Signed out. Documents on this device are still available.", "info");
   } catch (error) {
@@ -542,9 +649,6 @@ const deleteAccount = async () => {
     clearScopeDrafts(scope);
     deleteAccountOpen.value = false;
     deleteConfirmation.value = "";
-    resetDraft("guest");
-    hydrateDraft("guest");
-    await loadDocs();
     pushToast("Account and documents deleted", "success");
   } catch (error) {
     pushToast(getUserFacingError(error, "Unable to delete the account. Try again."), "error");
@@ -574,6 +678,7 @@ const saveConflictAsCopy = async () => {
 
 const handleDrop = async (event: DragEvent) => {
   event.preventDefault();
+  dragDepth = 0;
   isDraggingFile.value = false;
   const file = event.dataTransfer?.files?.[0];
   if (file) {
@@ -581,7 +686,53 @@ const handleDrop = async (event: DragEvent) => {
   }
 };
 
+const handleDragEnter = (event: DragEvent) => {
+  if (!event.dataTransfer?.types.includes("Files")) return;
+  dragDepth += 1;
+  isDraggingFile.value = true;
+};
+
+const handleDragLeave = () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) isDraggingFile.value = false;
+};
+
 watch([documentTitle, editorContent], () => cacheDraft());
+
+watch(storageScope, () => {
+  if (!editorReady) return;
+  flushDraft();
+  scopeRevision += 1;
+  documents.value = [];
+  documentLoadError.value = null;
+  resetDraft(storageScope.value);
+  hydrateDraft(storageScope.value);
+  searchQuery.value = "";
+  paletteOpen.value = false;
+  importDialogOpen.value = false;
+  importedLocalIds.value = [];
+  localDocuments.value = [];
+  importBusy.value = false;
+  isSaving.value = false;
+  publicationDialogOpen.value = false;
+  publicationUrlCopied.value = false;
+  publicationStatus.value = null;
+  publicationBusy.value = false;
+  conflictDocument.value = null;
+  signOutDialogOpen.value = false;
+  deleteAccountOpen.value = false;
+  deleteConfirmation.value = "";
+  isDeleteOpen.value = false;
+  void loadDocs();
+  if (user.value) void loadLocalImportCandidates();
+}, { flush: "sync" });
+
+onBeforeUnmount(() => {
+  flushDraft();
+  if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer);
+  editorReady = false;
+  scopeRevision += 1;
+});
 
 watch(paletteOpen, async (open) => {
   if (open) {
@@ -604,10 +755,10 @@ useKeyboardShortcuts({
 });
 
 onMounted(async () => {
-  hydrateTheme();
   await initializeAuth();
   resetDraft(storageScope.value);
   hydrateDraft(storageScope.value);
+  editorReady = true;
   await loadDocs();
   if (user.value) {
     await loadLocalImportCandidates();
@@ -618,19 +769,20 @@ onMounted(async () => {
 <template>
   <div
     :class="['h-screen w-screen overflow-hidden', rootClass]"
-    @dragenter.prevent="isDraggingFile = true"
+    @dragenter.prevent="handleDragEnter"
     @dragover.prevent
-    @dragleave.prevent="isDraggingFile = false"
-    @drop="handleDrop"
+    @dragleave.prevent="handleDragLeave"
+    @drop.prevent="handleDrop"
   >
     <div
       v-if="isDraggingFile"
       class="pointer-events-none fixed inset-0 z-50 grid place-items-center bg-black/40 backdrop-blur-xl"
     >
-      <div :class="[surfaceClass, 'px-6 py-3 text-sm text-zinc-200']">Drop Markdown file to import</div>
+      <div :class="[surfaceClass, strongTextClass, 'px-6 py-3 text-sm']">Drop Markdown file to import</div>
     </div>
 
-    <div class="flex h-full w-full">
+    <div v-if="!isAuthReady" class="grid h-full place-items-center" role="status">Loading your documents…</div>
+    <div v-else class="flex h-full w-full">
       <DocumentLibrary
         v-if="!zenMode"
         v-model:search-query="searchQuery"
@@ -639,7 +791,7 @@ onMounted(async () => {
         :active-document-id="activeDocumentId"
         :theme-mode="themeMode"
         :is-authenticated="Boolean(user)"
-        :has-local-documents="localDocuments.length > 0"
+        :has-local-documents-to-import="hasLocalDocumentsToImport"
         :border-class="borderClass"
         :surface-class="sidebarClass"
         :control-class="controlClass"
@@ -660,22 +812,34 @@ onMounted(async () => {
         >
           <div class="flex items-center gap-2">
             <button
-              :class="[controlClass, 'h-8 w-8 p-0 text-zinc-400 md:hidden']"
+              :class="[controlClass, 'h-8 w-8 p-0 md:hidden']"
               @click="mobileSidebarOpen = true"
             >
               =
             </button>
             <div class="flex flex-col gap-0.5">
-              <label :class="['text-[10px] uppercase tracking-[0.14em]', mutedTextClass]">File name</label>
-              <input
-                ref="titleInput"
-                :value="documentTitle"
-                :class="['bg-transparent text-sm tracking-tight placeholder:opacity-70 focus:outline-none', strongTextClass]"
-                placeholder="Untitled Document"
-                @input="updateTitle(($event.target as HTMLInputElement).value)"
-              />
+              <label for="document-title" :class="['text-[10px] uppercase tracking-[0.14em]', mutedTextClass]">File name</label>
+              <div :class="['flex w-48 items-center rounded border px-2 py-0.5 focus-within:ring-1 sm:w-64', borderClass, isDark ? 'focus-within:ring-zinc-700' : 'focus-within:ring-zinc-500']">
+                <input
+                  id="document-title"
+                  ref="titleInput"
+                  :value="documentTitle"
+                  :class="['min-w-0 flex-1 bg-transparent text-sm tracking-tight placeholder:opacity-70 focus:outline-none', strongTextClass]"
+                  placeholder="Untitled Document"
+                  autocomplete="off"
+                  spellcheck="false"
+                  @focus="startTitleEditing"
+                  @blur="finishTitleEditing"
+                  @input="updateTitle(($event.target as HTMLInputElement).value)"
+                  @keydown.enter.prevent="titleInput?.blur()"
+                  @keydown.esc.prevent="cancelTitleEditing"
+                >
+                <span :class="['text-sm', mutedTextClass]">.md</span>
+              </div>
             </div>
-            <span :class="['text-xs', mutedTextClass]">{{ isDirty ? "Unsaved" : "Saved" }}</span>
+            <span :class="['text-xs', mutedTextClass]" role="status" aria-live="polite">
+              {{ isSaving ? "Saving…" : isDirty ? "Unsaved" : "Saved" }}
+            </span>
           </div>
 
           <div class="flex items-center gap-2">
@@ -702,18 +866,24 @@ onMounted(async () => {
                 Preview
               </button>
             </div>
-            <button :class="[controlClass, 'px-3 py-1.5 text-xs text-zinc-300']" @click="toggleZen">Zen</button>
+            <button :class="[controlClass, 'px-3 py-1.5 text-xs']" @click="toggleZen">Zen</button>
             <button
               v-if="user"
               :disabled="!activeDocumentId || isDirty"
-              :class="[controlClass, 'px-3 py-1.5 text-xs text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40']"
+              :class="[controlClass, 'px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40']"
               :title="isDirty ? 'Save before sharing' : !activeDocumentId ? 'Save the document first' : 'Share the saved document by link'"
               @click="openPublicationDialog"
             >
               Share
             </button>
-            <button :class="[controlClass, 'px-3 py-1.5 text-xs text-zinc-300']" @click="isDeleteOpen = true">Delete</button>
-            <button :class="[controlClass, 'px-3 py-1.5 text-xs text-zinc-100']" @click="saveCurrentDocument">Save</button>
+            <button :class="[controlClass, 'px-3 py-1.5 text-xs']" @click="isDeleteOpen = true">Delete</button>
+            <button
+              :disabled="isSaving"
+              :class="[controlClass, 'min-w-16 px-3 py-1.5 text-xs disabled:cursor-wait disabled:opacity-60']"
+              @click="saveCurrentDocument"
+            >
+              {{ isSaving ? "Saving…" : "Save" }}
+            </button>
             <AccountControls
               :user="user"
               @sign-out="requestSignOut"
@@ -721,6 +891,13 @@ onMounted(async () => {
             />
           </div>
         </header>
+
+        <DocumentLoadNotice
+          :error="documentLoadError"
+          :loading="isLoadingDocuments"
+          @retry="loadDocs"
+          @sign-in="signInAgain"
+        />
 
         <section class="grid min-h-0 flex-1 gap-0" :class="layoutMode === 'split' ? 'md:grid-cols-2' : 'grid-cols-1'">
           <section
@@ -757,13 +934,13 @@ onMounted(async () => {
           :class="['flex h-11 items-center justify-between border-t px-3 text-xs md:px-4', borderClass, chromeClass, mutedTextClass]"
         >
           <div class="flex items-center gap-2">
-            <button :class="[controlClass, 'px-2 py-1 text-[11px] text-zinc-300']" @click="exportMarkdown">
+            <button :class="[controlClass, 'px-2 py-1 text-[11px]']" @click="exportMarkdown">
               .md
             </button>
-            <button :class="[controlClass, 'px-2 py-1 text-[11px] text-zinc-300']" @click="exportHtml">
+            <button :class="[controlClass, 'px-2 py-1 text-[11px]']" @click="exportHtml">
               .html
             </button>
-            <button :class="[controlClass, 'px-2 py-1 text-[11px] text-zinc-300']" @click="exportPdf">
+            <button :class="[controlClass, 'px-2 py-1 text-[11px]']" @click="exportPdf">
               .pdf
             </button>
           </div>
@@ -781,7 +958,7 @@ onMounted(async () => {
       <aside :class="['absolute left-0 top-0 h-full w-64 border-r p-3', borderClass, sidebarClass]">
         <div class="mb-3 flex items-center justify-between">
           <p :class="['text-sm tracking-tight', strongTextClass]">Files</p>
-          <button :class="[controlClass, 'h-8 w-8 p-0 text-zinc-400']" @click="mobileSidebarOpen = false">
+          <button :class="[controlClass, 'h-8 w-8 p-0']" @click="mobileSidebarOpen = false">
             x
           </button>
         </div>
@@ -845,26 +1022,28 @@ onMounted(async () => {
       leave-active-class="transition duration-200 ease-in"
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
-      class="fixed bottom-4 right-4 z-[60] flex flex-col gap-2"
+      class="fixed bottom-4 left-1/2 z-[60] flex -translate-x-1/2 flex-col gap-2 sm:left-auto sm:right-4 sm:translate-x-0"
+      aria-live="polite"
+      aria-atomic="true"
     >
       <div
         v-for="toast in toasts"
         :key="toast.id"
         :class="[
-          'flex min-w-[220px] items-center justify-between rounded-md border px-3 py-2 text-xs backdrop-blur-xl animate-[bounce_0.45s_ease-out]',
+          'flex min-w-[260px] items-center justify-between rounded-md border px-4 py-3 text-sm shadow-lg backdrop-blur-xl',
           isDark ? 'border-white/5 bg-zinc-900/90 text-zinc-200' : 'border-zinc-300 bg-white/95 text-zinc-800'
         ]"
       >
-        <span :class="toast.tone === 'error' ? 'text-rose-300' : toast.tone === 'success' ? 'text-emerald-300' : 'text-zinc-200'">
+        <span :class="toast.tone === 'error' ? 'text-rose-700 dark:text-rose-300' : toast.tone === 'success' ? 'text-emerald-700 dark:text-emerald-300' : 'text-zinc-800 dark:text-zinc-200'">
           {{ toast.title }}
         </span>
-        <button class="ml-3 text-zinc-500 hover:text-zinc-200" @click="dismiss(toast.id)">x</button>
+        <button class="ml-3 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200" aria-label="Dismiss notification" @click="dismiss(toast.id)">×</button>
       </div>
     </TransitionGroup>
 
     <div v-if="zenMode" class="fixed right-4 top-4 z-50 flex gap-2">
-      <button :class="[controlClass, 'px-3 py-2 text-xs text-zinc-200']" @click="toggleZen">Exit Zen</button>
-      <button :class="[controlClass, 'px-3 py-2 text-xs text-zinc-200']" @click="openPalette">Cmd+K</button>
+      <button :class="[controlClass, 'px-3 py-2 text-xs']" @click="toggleZen">Exit Zen</button>
+      <button :class="[controlClass, 'px-3 py-2 text-xs']" @click="openPalette">Cmd+K</button>
     </div>
 
     <div
@@ -875,7 +1054,7 @@ onMounted(async () => {
         <h2 :class="['text-sm font-semibold tracking-tight', strongTextClass]">Delete this document?</h2>
         <p :class="['mt-2 text-sm', mutedTextClass]">This action cannot be undone.</p>
         <div class="mt-4 flex justify-end gap-2">
-          <button :class="[controlClass, 'px-3 py-2 text-xs text-zinc-300']" @click="isDeleteOpen = false">
+          <button :class="[controlClass, 'px-3 py-2 text-xs']" @click="isDeleteOpen = false">
             Cancel
           </button>
           <button :class="dangerButtonClass" @click="removeCurrentDocument">
@@ -899,6 +1078,7 @@ onMounted(async () => {
       :open="publicationDialogOpen"
       :status="publicationStatus"
       :busy="publicationBusy"
+      :copied="publicationUrlCopied"
       :has-remote-images="hasRemoteImages"
       @close="publicationDialogOpen = false"
       @publish="publishDocument"
@@ -915,32 +1095,32 @@ onMounted(async () => {
     />
 
     <div v-if="signOutDialogOpen" class="fixed inset-0 z-[90] grid place-items-center bg-black/70 px-4 backdrop-blur-xl">
-      <section class="w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900 p-5 text-zinc-100 shadow-2xl">
+      <section class="w-full max-w-sm rounded-xl border border-zinc-300 dark:border-white/10 bg-white dark:bg-zinc-900 p-5 text-zinc-900 dark:text-zinc-100 shadow-2xl">
         <h2 class="text-base font-semibold">Unsaved changes</h2>
-        <p class="mt-2 text-sm leading-6 text-zinc-400">Save or discard your changes before signing out.</p>
+        <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">Save or discard your changes before signing out.</p>
         <div class="mt-5 grid gap-2">
-          <button class="rounded-md bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-950" @click="saveThenSignOut">Save and sign out</button>
-          <button class="rounded-md border border-rose-400/30 px-3 py-2 text-sm text-rose-300" @click="performSignOut(true)">Discard and sign out</button>
+          <button class="rounded-md bg-zinc-900 dark:bg-zinc-100 px-3 py-2 text-sm font-medium text-white dark:text-zinc-950" @click="saveThenSignOut">Save and sign out</button>
+          <button class="rounded-md border border-rose-400/30 px-3 py-2 text-sm text-rose-700 dark:text-rose-300" @click="performSignOut(true)">Discard and sign out</button>
           <button class="px-3 py-2 text-xs text-zinc-500" @click="signOutDialogOpen = false">Cancel</button>
         </div>
       </section>
     </div>
 
     <div v-if="deleteAccountOpen" class="fixed inset-0 z-[90] grid place-items-center bg-black/70 px-4 backdrop-blur-xl">
-      <section class="w-full max-w-md rounded-xl border border-rose-400/20 bg-zinc-900 p-5 text-zinc-100 shadow-2xl">
+      <section class="w-full max-w-md rounded-xl border border-rose-400/20 bg-white dark:bg-zinc-900 p-5 text-zinc-900 dark:text-zinc-100 shadow-2xl">
         <h2 class="text-base font-semibold">Delete account permanently</h2>
-        <p class="mt-2 text-sm leading-6 text-zinc-400">
+        <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
           This permanently deletes your account, its documents, and all shared links. This action cannot be undone.
         </p>
-        <label for="delete-confirmation" class="mt-4 block text-xs text-zinc-300">Type DELETE to confirm</label>
+        <label for="delete-confirmation" class="mt-4 block text-xs text-zinc-700 dark:text-zinc-300">Type DELETE to confirm</label>
         <input
           id="delete-confirmation"
           v-model="deleteConfirmation"
           autocomplete="off"
-          class="mt-2 w-full rounded-md border border-white/10 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-rose-400/50"
+          class="mt-2 w-full rounded-md border border-zinc-300 dark:border-white/10 bg-zinc-50 dark:bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-rose-400/50"
         />
         <div class="mt-5 flex justify-end gap-2">
-          <button class="rounded-md border border-white/10 px-3 py-2 text-xs text-zinc-300" :disabled="accountBusy" @click="deleteAccountOpen = false; deleteConfirmation = ''">Cancel</button>
+          <button class="rounded-md border border-zinc-300 dark:border-white/10 px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300" :disabled="accountBusy" @click="deleteAccountOpen = false; deleteConfirmation = ''">Cancel</button>
           <button class="rounded-md bg-rose-500 px-3 py-2 text-xs font-medium text-white disabled:opacity-40" :disabled="accountBusy || deleteConfirmation !== 'DELETE'" @click="deleteAccount">
             {{ accountBusy ? "Deleting…" : "Delete account" }}
           </button>

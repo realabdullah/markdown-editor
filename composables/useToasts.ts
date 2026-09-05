@@ -11,7 +11,11 @@ export const useToasts = () => {
     toasts.value = toasts.value.filter((toast) => toast.id !== id);
   };
 
-  const push = (title: string, tone: EditorToast["tone"] = "info", ttl = 2600) => {
+  const push = (
+    title: string,
+    tone: EditorToast["tone"] = "info",
+    ttl = tone === "error" ? 8000 : 5000,
+  ) => {
     const id = crypto.randomUUID();
     toasts.value = [...toasts.value, { id, title, tone }];
     if (import.meta.client) {

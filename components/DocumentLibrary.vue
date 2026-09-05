@@ -8,7 +8,7 @@ const props = defineProps<{
   collapsed: boolean;
   themeMode: "light" | "dark";
   isAuthenticated: boolean;
-  hasLocalDocuments: boolean;
+  hasLocalDocumentsToImport: boolean;
   borderClass: string;
   surfaceClass: string;
   controlClass: string;
@@ -39,7 +39,7 @@ const emit = defineEmits<{
   >
     <div :class="['flex h-12 items-center justify-between border-b px-3', props.borderClass]">
       <button
-        :class="[props.controlClass, 'h-8 w-8 p-0 text-zinc-400 hover:text-zinc-100']"
+        :class="[props.controlClass, 'h-8 w-8 p-0']"
         @click="emit('update:collapsed', !props.collapsed)"
       >
         <span class="sr-only">Toggle sidebar</span>
@@ -84,7 +84,7 @@ const emit = defineEmits<{
         </button>
       </div>
       <button
-        v-if="props.isAuthenticated && props.hasLocalDocuments"
+        v-if="props.isAuthenticated && props.hasLocalDocumentsToImport"
         :class="[props.controlClass, 'px-2 py-2 text-xs']"
         @click="emit('import')"
       >

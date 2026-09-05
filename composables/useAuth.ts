@@ -2,6 +2,7 @@ import type { User } from "@supabase/supabase-js";
 
 export const useAuth = () => {
   const { $supabase } = useNuxtApp();
+  const config = useRuntimeConfig();
   const user = useState<User | null>("auth-user", () => null);
   const isAuthReady = useState<boolean>("auth-ready", () => false);
   const authSubscriptionStarted = useState<boolean>(
@@ -10,21 +11,25 @@ export const useAuth = () => {
   );
 
   const initialize = async () => {
+    if (isAuthReady.value) return;
     if (!$supabase) {
       user.value = null;
       isAuthReady.value = true;
       return;
     }
 
-    const { data } = await $supabase.auth.getUser();
-    user.value = data.user;
-    isAuthReady.value = true;
-
     if (!authSubscriptionStarted.value) {
       authSubscriptionStarted.value = true;
       $supabase.auth.onAuthStateChange((_event, session) => {
         user.value = session?.user || null;
       });
+    }
+    try {
+      await $supabase.auth.initialize();
+      const { data } = await $supabase.auth.getSession();
+      user.value = data.session?.user || null;
+    } finally {
+      isAuthReady.value = true;
     }
   };
 
@@ -69,7 +74,7 @@ export const useAuth = () => {
   return {
     user,
     isAuthReady,
-    isConfigured: computed(() => Boolean($supabase)),
+    isConfigured: computed(() => Boolean(config.public.supabaseUrl && config.public.supabasePublishableKey)),
     initialize,
     signInWithMagicLink,
     signInWithGoogle,

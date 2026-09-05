@@ -11,8 +11,8 @@ body,
 }
 
 body {
-  background: #0a0a0a;
-  color: #f4f4f5;
+  background: #f4f4f5;
+  color: #18181b;
   font-family: InterVariable, Inter, Geist, ui-sans-serif, system-ui, sans-serif;
   font-feature-settings: "cv11" 1, "cv10" 1;
 }
@@ -48,3 +48,7 @@ body {
 *:hover::-webkit-scrollbar-thumb {
   background-color: rgb(63 63 70);
 }
+
+html { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
+html[data-theme="dark"] body { background: #0a0a0a; color: #f4f4f5; }

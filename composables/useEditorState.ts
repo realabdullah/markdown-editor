@@ -28,7 +28,7 @@ export const useEditorState = () => {
   const documentTitle = useState<string>("documentTitle", () => "Untitled Document");
   const searchQuery = useState<string>("searchQuery", () => "");
   const sortMode = useState<SortMode>("sortMode", () => "updated");
-  const themeMode = useState<"light" | "dark">("themeMode", () => "dark");
+  const { themeMode, applyTheme, hydrateTheme } = useTheme();
   const layoutMode = useState<LayoutMode>("layoutMode", () => "split");
   const previewStyle = useState<PreviewStyle>("previewStyle", () => "gfm");
   const zenMode = useState<boolean>("zenMode", () => false);
@@ -55,31 +55,6 @@ export const useEditorState = () => {
     }
     return results;
   });
-
-  const applyTheme = (theme: "light" | "dark") => {
-    themeMode.value = theme;
-    if (!import.meta.client) {
-      return;
-    }
-    const root = document.documentElement;
-    root.dataset.theme = theme;
-    root.classList.toggle("dark", theme === "dark");
-    localStorage.setItem("md-editor-theme", theme);
-  };
-
-  const hydrateTheme = () => {
-    if (!import.meta.client) {
-      return;
-    }
-    const cached = localStorage.getItem("md-editor-theme");
-    if (cached === "light" || cached === "dark") {
-      applyTheme(cached);
-      return;
-    }
-    applyTheme(
-      window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
-    );
-  };
 
   const draftScope = useState<string>("draftScope", () => "guest");
   const draftDocumentId = useState<string>("draftDocumentId", () => "new");
@@ -130,22 +105,20 @@ export const useEditorState = () => {
     }
   };
 
+  const flushDraft = () => {
+    if (cacheTimer) clearTimeout(cacheTimer);
+    cacheTimer = null;
+    if (!import.meta.client || !isDirty.value) return;
+    localStorage.setItem(draftKey(), JSON.stringify({
+      title: documentTitle.value,
+      content: editorContent.value,
+    }));
+  };
+
   const cacheDraft = () => {
-    if (!import.meta.client) {
-      return;
-    }
-    if (cacheTimer) {
-      clearTimeout(cacheTimer);
-    }
-    cacheTimer = setTimeout(() => {
-      localStorage.setItem(
-        draftKey(),
-        JSON.stringify({
-          title: documentTitle.value,
-          content: editorContent.value,
-        }),
-      );
-    }, 300);
+    if (!import.meta.client) return;
+    if (cacheTimer) clearTimeout(cacheTimer);
+    cacheTimer = setTimeout(flushDraft, 300);
   };
 
   const clearDraft = (scope = draftScope.value, id = draftDocumentId.value) => {
@@ -225,6 +198,7 @@ export const useEditorState = () => {
     hydrateTheme,
     hydrateDraft,
     cacheDraft,
+    flushDraft,
     clearDraft,
     clearScopeDrafts,
     setDraftContext,
