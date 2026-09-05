@@ -14,11 +14,6 @@ import {
   resolveWorkspaceSupport,
 } from "./workspaceSupport";
 import type {
-  MigrationMarker,
-  MigrationSource,
-  MigrationTarget,
-} from "./workspaceMigration";
-import type {
   WorkspaceConflict,
   WorkspaceDocument,
   WorkspaceDraft,
@@ -30,11 +25,11 @@ import type {
 } from "~/types/workspace";
 
 const DB_NAME = "markdown_editor_workspace";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const HANDLE_STORE = "directory_handles";
 const DRAFT_STORE = "recovery_drafts";
 const STATE_STORE = "workspace_state";
-const MIGRATION_STORE = "migration_markers";
+const RETIRED_STORES = ["migration_markers"] as const;
 const CURRENT_WORKSPACE = "current";
 // The preferred pane layout is a per-device preference, not a per-folder one.
 const VIEW_MODE_KEY = "viewMode";
@@ -63,31 +58,12 @@ export interface WorkspaceFileSystemAdapter {
   loadLastOpened: (workspaceId: string) => Promise<string | null>;
   saveViewMode: (mode: WorkspaceViewMode) => Promise<void>;
   loadViewMode: () => Promise<WorkspaceViewMode | null>;
-  saveMigrationMarker: (marker: MigrationMarker) => Promise<void>;
-  loadMigrationMarker: (
-    workspaceId: string,
-    source: MigrationSource,
-    documentId: string,
-  ) => Promise<MigrationMarker | null>;
-  saveMigrationDismissed: (workspaceId: string) => Promise<void>;
-  loadMigrationDismissed: (workspaceId: string) => Promise<boolean>;
 }
 
 const draftKey = (workspaceId: string, path: string) =>
   `${workspaceId}:${path}`;
 
-const markerKey = (
-  workspaceId: string,
-  source: MigrationSource,
-  documentId: string,
-) => `${workspaceId}:${source}:${documentId}`;
-
-const REQUIRED_STORES = [
-  HANDLE_STORE,
-  DRAFT_STORE,
-  STATE_STORE,
-  MIGRATION_STORE,
-] as const;
+const REQUIRED_STORES = [HANDLE_STORE, DRAFT_STORE, STATE_STORE] as const;
 
 const createMissingStores = (database: IDBPDatabase) => {
   for (const store of REQUIRED_STORES) {
@@ -95,9 +71,27 @@ const createMissingStores = (database: IDBPDatabase) => {
       database.createObjectStore(store);
     }
   }
+  // Left behind by the legacy import, which no longer exists.
+  for (const store of RETIRED_STORES) {
+    if (database.objectStoreNames.contains(store)) {
+      database.deleteObjectStore(store);
+    }
+  }
 };
 
 let connection: Promise<IDBPDatabase> | null = null;
+
+const release = () => {
+  connection = null;
+};
+
+/**
+ * How long to wait for another tab to release the database before giving up.
+ * An upgrade cannot start while an older connection is open, and a tab running
+ * code from before `blocking` was handled will never close on its own, so the
+ * alternative to a timeout is waiting for ever.
+ */
+const UPGRADE_BLOCKED_TIMEOUT = 3000;
 
 /**
  * A store added to this file after a browser first created the database would
@@ -107,20 +101,53 @@ let connection: Promise<IDBPDatabase> | null = null;
  * so a forgotten version bump cannot strand anyone.
  */
 const connect = async (): Promise<IDBPDatabase> => {
-  const current = await openDB(DB_NAME);
-  const isComplete = REQUIRED_STORES.every((store) =>
-    current.objectStoreNames.contains(store),
-  );
-  if (isComplete && current.version >= DB_VERSION) return current;
+  let open: IDBPDatabase | null = null;
+  // Step aside rather than hold a newer tab's upgrade behind this handle.
+  const stepAside = () => {
+    open?.close();
+    release();
+  };
 
-  const version = Math.max(current.version + 1, DB_VERSION);
-  current.close();
-  return openDB(DB_NAME, version, {
-    upgrade: createMissingStores,
-    terminated: () => {
-      connection = null;
-    },
+  open = await openDB(DB_NAME, undefined, {
+    blocking: stepAside,
+    terminated: release,
   });
+
+  const isComplete = REQUIRED_STORES.every((store) =>
+    open!.objectStoreNames.contains(store),
+  );
+  if (isComplete && open.version >= DB_VERSION) return open;
+
+  const version = Math.max(open.version + 1, DB_VERSION);
+  open.close();
+  open = null;
+
+  let onBlocked: (() => void) | null = null;
+  const upgraded = openDB(DB_NAME, version, {
+    upgrade: createMissingStores,
+    blocked: () => onBlocked?.(),
+    blocking: stepAside,
+    terminated: release,
+  }).then((database) => {
+    open = database;
+    return database;
+  });
+
+  return Promise.race([
+    upgraded,
+    new Promise<never>((_resolve, reject) => {
+      onBlocked = () =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                "This workspace is open in another tab. Close it and try again.",
+              ),
+            ),
+          UPGRADE_BLOCKED_TIMEOUT,
+        );
+    }),
+  ]);
 };
 
 const openWorkspaceDb = (): Promise<IDBPDatabase> => {
@@ -178,29 +205,6 @@ export const browserWorkspaceFileSystem: WorkspaceFileSystemAdapter = {
     const db = await openWorkspaceDb();
     return (await db.get(STATE_STORE, VIEW_MODE_KEY)) ?? null;
   },
-  saveMigrationMarker: async (marker) => {
-    const db = await openWorkspaceDb();
-    await db.put(
-      MIGRATION_STORE,
-      marker,
-      markerKey(marker.workspaceId, marker.source, marker.documentId),
-    );
-  },
-  loadMigrationMarker: async (workspaceId, source, documentId) => {
-    const db = await openWorkspaceDb();
-    return (
-      (await db.get(MIGRATION_STORE, markerKey(workspaceId, source, documentId))) ??
-      null
-    );
-  },
-  saveMigrationDismissed: async (workspaceId) => {
-    const db = await openWorkspaceDb();
-    await db.put(STATE_STORE, true, `${workspaceId}:migrationDismissed`);
-  },
-  loadMigrationDismissed: async (workspaceId) => {
-    const db = await openWorkspaceDb();
-    return (await db.get(STATE_STORE, `${workspaceId}:migrationDismissed`)) === true;
-  },
 };
 
 export class BrowserWorkspaceRepository implements WorkspaceRepository {
@@ -220,6 +224,25 @@ export class BrowserWorkspaceRepository implements WorkspaceRepository {
     );
   };
 
+  /**
+   * Asks for access to the folder already held in `session`.
+   *
+   * The browser only shows the permission prompt while the click that asked for
+   * it is still fresh, and every await before the request spends that window —
+   * reading the handle back out of IndexedDB first was enough to lose it, and
+   * to leave the button looking inert until the prompt finally appeared.
+   */
+  requestAccess = async (session: WorkspaceSession): Promise<WorkspaceSession> => {
+    const permission = await this.fileSystem.getPermission(
+      session.directoryHandle,
+      true,
+    );
+    return {
+      ...session,
+      permissionState: permission,
+    };
+  };
+
   restore = async (
     requestPermission = false,
   ): Promise<WorkspaceSession | null> => {
@@ -234,8 +257,8 @@ export class BrowserWorkspaceRepository implements WorkspaceRepository {
 
   /**
    * Rebinds the workspace to a folder the user picks again. The id is reused so
-   * recovery drafts, the last-opened file, and migration markers stay attached
-   * rather than being orphaned under a fresh workspace.
+   * recovery drafts and the last-opened file stay attached rather than being
+   * orphaned under a fresh workspace.
    */
   reconnect = async (): Promise<WorkspaceSession> => {
     const previous = await this.fileSystem.loadDirectory();
@@ -256,7 +279,6 @@ export class BrowserWorkspaceRepository implements WorkspaceRepository {
     }
   };
 
-  /** Reads an image asset so the preview can show it without copying it. */
   readAsset = async (session: WorkspaceSession, path: string): Promise<File> =>
     (await this.resolveFile(session, path)).getFile();
 
@@ -338,7 +360,6 @@ export class BrowserWorkspaceRepository implements WorkspaceRepository {
     };
   };
 
-  /** Writes local content beside the original as `<name>.conflict.md`. */
   createConflictCopy = async (
     session: WorkspaceSession,
     conflict: WorkspaceConflict,
@@ -369,40 +390,6 @@ export class BrowserWorkspaceRepository implements WorkspaceRepository {
 
   loadViewMode = () => this.fileSystem.loadViewMode();
 
-  loadMigrationMarker = (
-    workspaceId: string,
-    source: MigrationSource,
-    documentId: string,
-  ) => this.fileSystem.loadMigrationMarker(workspaceId, source, documentId);
-
-  saveMigrationDismissed = (workspaceId: string) =>
-    this.fileSystem.saveMigrationDismissed(workspaceId);
-
-  loadMigrationDismissed = (workspaceId: string) =>
-    this.fileSystem.loadMigrationDismissed(workspaceId);
-
-  /** Root-level folder names, used to place and resume legacy imports. */
-  listFolders = async (session: WorkspaceSession): Promise<string[]> => {
-    const names: string[] = [];
-    for await (const [name, handle] of session.directoryHandle.entries()) {
-      if (handle.kind === "directory") names.push(name);
-    }
-    return names;
-  };
-
-  /** The filesystem and marker surface the legacy migration writes through. */
-  migrationTarget = (session: WorkspaceSession): MigrationTarget => ({
-    listFolders: () => this.listFolders(session),
-    exists: (path) => this.exists(session, path),
-    read: async (path) => (await this.read(session, path)).content,
-    create: async (path, content) => {
-      await this.create(session, path, content);
-    },
-    loadMarker: (source, documentId) =>
-      this.fileSystem.loadMigrationMarker(session.id, source, documentId),
-    saveMarker: (marker) => this.fileSystem.saveMigrationMarker(marker),
-  });
-
   private exists = async (session: WorkspaceSession, path: string) => {
     try {
       await this.resolveFile(session, path);
@@ -415,7 +402,6 @@ export class BrowserWorkspaceRepository implements WorkspaceRepository {
     }
   };
 
-  /** One entry settles whether the root handle still resolves. */
   private isRootAvailable = async (session: WorkspaceSession) => {
     try {
       await session.directoryHandle.entries().next();

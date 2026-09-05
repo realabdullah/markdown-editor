@@ -2,11 +2,7 @@ import type { WorkspaceMobilePane, WorkspaceViewMode } from "~/types/workspace";
 
 const MOBILE_QUERY = "(max-width: 1023px)";
 
-/**
- * Pane layout for the workspace shell. Desktop offers editor, split, and
- * reading modes and remembers the last one; narrow viewports show a single pane
- * with an explicit Write/Read control instead.
- */
+/** Desktop remembers the last pane mode; narrow viewports use Write/Read. */
 export const useWorkspaceView = () => {
   const repository = useWorkspaceRepository();
 
@@ -18,6 +14,7 @@ export const useWorkspaceView = () => {
   const isNarrow = useState<boolean>("workspaceIsNarrow", () => false);
   const isPaletteOpen = useState<boolean>("workspacePaletteOpen", () => false);
   const isOutlineOpen = useState<boolean>("workspaceOutlineOpen", () => true);
+  const isSettingsOpen = useState<boolean>("workspaceSettingsOpen", () => false);
 
   const showEditor = computed(() =>
     isNarrow.value ? mobilePane.value === "write" : viewMode.value !== "reading",
@@ -62,6 +59,7 @@ export const useWorkspaceView = () => {
     isNarrow,
     isPaletteOpen,
     isOutlineOpen,
+    isSettingsOpen,
     showEditor,
     showPreview,
     setViewMode,

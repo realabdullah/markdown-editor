@@ -36,6 +36,32 @@ describe("BrowserWorkspaceRepository sessions", () => {
     expect(memory.getPersisted()).toMatchObject({ id: session.id });
   });
 
+  /**
+   * The browser only prompts while the click that asked is still fresh, so the
+   * request has to be the first thing the handler does. Reading the handle back
+   * out of storage first was enough to stall the prompt behind the read.
+   */
+  it("asks for permission without reading anything first", async () => {
+    const { memory, repository } = build();
+    const session = await repository.open();
+    memory.permissionCalls.length = 0;
+    let readsBeforePrompt = 0;
+    const adapter = memory.adapter;
+    const loadDirectory = adapter.loadDirectory.bind(adapter);
+    adapter.loadDirectory = async () => {
+      if (!memory.permissionCalls.length) readsBeforePrompt += 1;
+      return loadDirectory();
+    };
+
+    const granted = await repository.requestAccess(session);
+
+    expect(readsBeforePrompt).toBe(0);
+    expect(memory.permissionCalls).toEqual([true]);
+    expect(granted.permissionState).toBe("granted");
+    expect(granted.id).toBe(session.id);
+    expect(granted.directoryHandle).toBe(session.directoryHandle);
+  });
+
   it("restores access only after an explicit permission request", async () => {
     const { repository } = build();
     await repository.open();

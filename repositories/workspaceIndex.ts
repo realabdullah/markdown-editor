@@ -4,10 +4,7 @@ export interface WorkspaceSearchHit {
   excerpt: string;
 }
 
-/**
- * In-memory full-text index of Markdown content, filled incrementally after the
- * folder tree is built. Files above the index size limit are never added.
- */
+/** Files above the index size limit are never added. */
 export class WorkspaceSearchIndex {
   private readonly contents = new Map<string, string>();
 

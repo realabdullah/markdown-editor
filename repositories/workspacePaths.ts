@@ -1,4 +1,3 @@
-/** SHA-256 of UTF-8 content, used as the baseline for every verified write. */
 export const hashContent = async (content: string): Promise<string> => {
   const digest = await crypto.subtle.digest(
     "SHA-256",
@@ -11,7 +10,6 @@ export const hashContent = async (content: string): Promise<string> => {
 
 const ILLEGAL_NAME_CHARACTERS = /[\\/:*?"<>|]/g;
 
-/** Turns typed input into a workspace-relative `.md` path inside `parentPath`. */
 export const toMarkdownPath = (input: string, parentPath = ""): string => {
   const name = input.trim().replace(ILLEGAL_NAME_CHARACTERS, "-");
   const withExtension = name.toLowerCase().endsWith(".md")
@@ -45,7 +43,6 @@ const IMAGE_EXTENSIONS = [
   ".avif",
 ] as const;
 
-/** The image types the preview resolves and path completion offers. */
 export const isImageAssetPath = (path: string) =>
   IMAGE_EXTENSIONS.some((extension) => path.toLowerCase().endsWith(extension));
 

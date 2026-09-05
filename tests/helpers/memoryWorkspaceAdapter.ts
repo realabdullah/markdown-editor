@@ -1,20 +1,15 @@
 import type { WorkspaceFileSystemAdapter } from "../../repositories/browserWorkspaceRepository";
-import type { MigrationMarker } from "../../repositories/workspaceMigration";
 import type { WorkspaceDraft, WorkspaceViewMode } from "../../types/workspace";
 
-/** In-memory stand-in for the IndexedDB side of the workspace repository. */
 export const createMemoryAdapter = (handle: FileSystemDirectoryHandle) => {
   let pickable = handle;
   let persisted: { id: string; handle: FileSystemDirectoryHandle } | null = null;
   let permission: PermissionState = "prompt";
   const drafts = new Map<string, WorkspaceDraft>();
   const lastOpened = new Map<string, string>();
-  const markers = new Map<string, MigrationMarker>();
-  const dismissed = new Set<string>();
+  /** Records each call, so a test can assert nothing was read before one. */
+  const permissionCalls: boolean[] = [];
   let viewMode: WorkspaceViewMode | null = null;
-
-  const markerKey = (workspaceId: string, source: string, documentId: string) =>
-    `${workspaceId}:${source}:${documentId}`;
 
   const adapter: WorkspaceFileSystemAdapter = {
     getSupport: () => "supported",
@@ -24,6 +19,7 @@ export const createMemoryAdapter = (handle: FileSystemDirectoryHandle) => {
       persisted = workspace;
     },
     getPermission: async (_handle, requestPermission) => {
+      permissionCalls.push(requestPermission);
       if (requestPermission) permission = "granted";
       return permission;
     },
@@ -43,18 +39,6 @@ export const createMemoryAdapter = (handle: FileSystemDirectoryHandle) => {
       viewMode = mode;
     },
     loadViewMode: async () => viewMode,
-    saveMigrationMarker: async (marker) => {
-      markers.set(
-        markerKey(marker.workspaceId, marker.source, marker.documentId),
-        marker,
-      );
-    },
-    loadMigrationMarker: async (workspaceId, source, documentId) =>
-      markers.get(markerKey(workspaceId, source, documentId)) ?? null,
-    saveMigrationDismissed: async (workspaceId) => {
-      dismissed.add(workspaceId);
-    },
-    loadMigrationDismissed: async (workspaceId) => dismissed.has(workspaceId),
   };
 
   return {
@@ -63,9 +47,8 @@ export const createMemoryAdapter = (handle: FileSystemDirectoryHandle) => {
       pickable = next;
     },
     getPersisted: () => persisted,
+    permissionCalls,
     drafts,
     lastOpened,
-    markers,
-    dismissed,
   };
 };

@@ -38,7 +38,7 @@ const groups: { label: string; buttons: { id: WorkspaceFormatCommand; glyph: str
 
 <template>
   <div
-    class="flex flex-wrap items-center gap-1 border-b border-zinc-200 px-3 py-1.5 dark:border-zinc-800"
+    class="flex flex-wrap items-center gap-1 border-b border-line px-3 py-1.5"
     role="toolbar"
     aria-label="Formatting"
   >
@@ -48,13 +48,13 @@ const groups: { label: string; buttons: { id: WorkspaceFormatCommand; glyph: str
     >
       <span
         v-if="index > 0"
-        class="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-800"
+        class="mx-1 h-4 w-px bg-line"
         aria-hidden="true"
       />
       <button
         v-for="button in group.buttons"
         :key="button.id"
-        class="min-w-8 rounded-md px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-200/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:text-zinc-400 dark:hover:bg-zinc-900"
+        class="min-w-8 rounded-md px-2 py-1 text-xs font-medium text-ink-muted hover:bg-raised focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         type="button"
         :aria-label="button.label"
         :title="button.shortcut ? `${button.label} (${button.shortcut})` : button.label"

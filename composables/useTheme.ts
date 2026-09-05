@@ -1,38 +1,79 @@
-export const useTheme = () => {
-  const preference = useCookie<"light" | "dark" | null>("md-editor-theme", {
-    maxAge: 60 * 60 * 24 * 365,
-    sameSite: "lax",
-    path: "/",
-  });
-  const themeMode = useState<"light" | "dark">("themeMode", () =>
-    preference.value === "light" ? "light" : "dark",
-  );
+import { BUILT_IN_THEMES, THEME_STORAGE_KEY } from "~/themes/registry";
+import { normalizePreference, resolveThemeId, themeFor } from "~/utils/theme";
+import type { ThemeDefinition, ThemePreference } from "~/types/theme";
 
-  const applyTheme = (theme: "light" | "dark") => {
-    themeMode.value = theme;
-    preference.value = theme;
+let media: MediaQueryList | null = null;
+
+/**
+ * The boot script has already applied a theme by the time this runs, so
+ * hydration only has to agree with what is on screen. That is why the
+ * preference starts at "system" rather than at a fixed appearance.
+ */
+export const useTheme = () => {
+  const preference = useState<ThemePreference>("themePreference", () => "system");
+  const systemPrefersDark = useState<boolean>("systemPrefersDark", () => false);
+
+  const theme = computed<ThemeDefinition>(() =>
+    themeFor(resolveThemeId(preference.value, systemPrefersDark.value)),
+  );
+  const themeId = computed(() => theme.value.id);
+  const appearance = computed(() => theme.value.appearance);
+
+  const applyToDocument = (next: ThemeDefinition) => {
     if (!import.meta.client) return;
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.classList.toggle("dark", theme === "dark");
+    const root = document.documentElement;
+    root.dataset.theme = next.id;
+    root.dataset.appearance = next.appearance;
+    root.classList.toggle("dark", next.appearance === "dark");
+    root.style.colorScheme = next.appearance;
+  };
+
+  const setPreference = (next: ThemePreference) => {
+    preference.value = normalizePreference(next);
+    if (!import.meta.client) return;
     try {
-      localStorage.setItem("md-editor-theme", theme);
+      localStorage.setItem(THEME_STORAGE_KEY, preference.value);
     } catch {
-      // The cookie keeps the preference when browser storage is unavailable.
+      // Nothing to fall back to: without storage the choice lasts the session.
     }
+  };
+
+  const syncSystem = (event: MediaQueryList | MediaQueryListEvent) => {
+    systemPrefersDark.value = event.matches;
   };
 
   const hydrateTheme = () => {
     if (!import.meta.client) return;
-    let stored = preference.value;
-    if (stored !== "light" && stored !== "dark") {
-      try {
-        stored = localStorage.getItem("md-editor-theme") as typeof stored;
-      } catch { /* Use the system preference when storage is unavailable. */ }
+
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem(THEME_STORAGE_KEY);
+    } catch {
+      // Use the system preference when storage is unavailable.
     }
-    applyTheme(stored === "light" || stored === "dark"
-      ? stored
-      : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    preference.value = normalizePreference(stored);
+
+    // Watched even while a theme is pinned, to avoid listener churn on switch.
+    media = window.matchMedia("(prefers-color-scheme: dark)");
+    syncSystem(media);
+    media.addEventListener("change", syncSystem);
+
+    watchEffect(() => applyToDocument(theme.value));
   };
 
-  return { themeMode, applyTheme, hydrateTheme };
+  const disposeTheme = () => {
+    media?.removeEventListener("change", syncSystem);
+    media = null;
+  };
+
+  return {
+    preference,
+    themeId,
+    theme,
+    appearance,
+    themes: BUILT_IN_THEMES,
+    setPreference,
+    hydrateTheme,
+    disposeTheme,
+  };
 };

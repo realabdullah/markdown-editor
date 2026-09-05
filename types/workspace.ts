@@ -9,7 +9,6 @@ export interface WorkspaceFile {
   indexStatus: WorkspaceIndexStatus;
 }
 
-/** An image the preview can resolve and relative-path completion can offer. */
 export interface WorkspaceAsset {
   path: string;
   name: string;
@@ -69,6 +68,7 @@ export interface WorkspaceDraft {
 export interface WorkspaceRepository {
   open: () => Promise<WorkspaceSession>;
   restore: (requestPermission?: boolean) => Promise<WorkspaceSession | null>;
+  requestAccess: (session: WorkspaceSession) => Promise<WorkspaceSession>;
   reconnect: () => Promise<WorkspaceSession>;
   scan: (session: WorkspaceSession) => Promise<WorkspaceScanResult>;
   read: (session: WorkspaceSession, path: string) => Promise<WorkspaceDocument>;

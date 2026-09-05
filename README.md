@@ -1,104 +1,64 @@
 # Markdown Editor
 
-A Markdown editor that works without an account and lets you save documents on this device or access and share them across devices when you sign in.
+A private, browser-based workspace for editing Markdown files directly in a local folder.
 
-## Technical overview
+Markdown Editor is designed for repository documentation, notes, and other collections of `.md` files. Your files stay on your device and remain available to Git, your text editor, and the rest of your existing workflow. There are no accounts, uploads, or cloud sync.
 
-- Framework: Nuxt 4, Vue 3.5
-- State: Nuxt `useState` composables
-- Editor: CodeMirror 6
-- Markdown pipeline: `markdown-it` + `isomorphic-dompurify`
-- Authentication and database: Supabase Auth + Postgres with RLS
-- Persistence: IndexedDB for guests, Postgres for accounts, scoped local draft recovery
-- Backend: Nuxt/Nitro API routes
-- UI: Tailwind CSS + `@tailwindcss/typography`
+## Features
 
-## Requirements
+- Open a local folder and browse its Markdown files
+- Create, edit, preview, and save `.md` files
+- Search across file names and document contents
+- Navigate long documents with an outline and quick open
+- Write in editor, split, or reading mode
+- Preview GitHub-flavored Markdown, including tables, task lists, fenced code blocks, and strikethrough
+- Recover unsaved changes after a reload
+- Review conflicts when a file changes outside the editor
+- Export documents as Markdown or rendered HTML
+- Choose from six built-in themes or follow your system appearance
 
-- Node.js 22+
-- pnpm 10+ (or npm/yarn equivalent)
-- A Supabase project for account and sharing features
+## Browser support
 
-## Setup
+Markdown Editor requires a desktop version of Google Chrome or Microsoft Edge. Safari, Firefox, and mobile browsers do not support the folder access required to edit local files.
 
-Install dependencies and create local environment settings:
+The deployed application must use HTTPS. Local development works on `localhost`.
+
+## Privacy
+
+Your documents remain on your device. The editor does not require an account, store files on a server, or send telemetry. You choose which folder to open, and you can revoke access through your browser at any time.
+
+## Local development
+
+Requirements:
+
+- Node.js 22
+- pnpm 10
+
+Install dependencies and start the development server:
 
 ```bash
 pnpm install
-cp .env.example .env
+pnpm dev
 ```
 
-Set the following values from the Supabase project Connect dialog:
+Open [http://localhost:3000](http://localhost:3000) in Chrome or Edge.
 
-- `NUXT_PUBLIC_SUPABASE_URL`
-- `NUXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-- `NUXT_SUPABASE_SECRET_KEY` — server-only; never expose this value to the browser
-- `NUXT_RATE_LIMIT_PEPPER` — a long random secret used to hash rate-limit identities
-
-Apply the committed database migration:
+## Available commands
 
 ```bash
-pnpm exec supabase login
-pnpm exec supabase link --project-ref <project-ref>
-pnpm exec supabase db push
+pnpm dev          # Start the development server
+pnpm build        # Create a production build
+pnpm preview      # Preview the production build
+pnpm lint         # Run ESLint
+pnpm typecheck    # Run TypeScript checks
+pnpm test         # Run the test suite
 ```
 
-In Supabase Auth settings:
-
-1. Enable email magic-link authentication and Google OAuth.
-2. Add `http://localhost:3000/auth/callback` for development.
-3. Add `https://<production-domain>/auth/callback` and preview callback URLs used by the deployment.
-4. Configure custom SMTP before relying on branded or production-volume sign-in emails.
-
-Start development server:
+Before submitting changes, run:
 
 ```bash
-pnpm run dev
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
 ```
-
-Application URL:
-
-- `http://localhost:3000`
-
-## Scripts
-
-- `pnpm run dev` - Start Nuxt development server
-- `pnpm run build` - Build production bundle
-- `pnpm run preview` - Preview production build
-- `pnpm run lint` - Run ESLint
-- `pnpm run typecheck` - Run Nuxt type checking
-
-## How documents are saved
-
-- You can create and edit documents without signing in. These documents remain on your device.
-- When you sign in, new documents are saved to your account and are available on your other devices.
-- Documents already on a device are added to your account only when you select them. They remain on that device until you remove them.
-- Anyone with a shared link can read the saved document. Later changes remain private until you share again.
-- Disabling a shared link makes it unavailable. Sharing the document again creates a new link.
-
-## Deployment
-
-Build:
-
-```bash
-pnpm run build
-```
-
-Vercel should run the Nuxt build directly:
-
-```bash
-pnpm run build
-```
-
-Configure all four Nuxt environment variables independently for preview and production. Add the corresponding Auth callback URLs to Supabase. Enable database backups or point-in-time recovery at the level appropriate for the deployment.
-
-The Dockerfile remains available for a Node-hosted deployment and runs `.output/server/index.mjs` on Node 22.
-
-## Security and limits
-
-- Each document can contain up to 1 MiB of content. Each account can hold up to 500 documents.
-- Only the signed-in account can access its saved documents.
-- Shared documents are not listed publicly, but anyone with the link can read them.
-- Raw HTML in Markdown is disabled, and rendered content is sanitized before display.
-- Images from other websites may let those sites see a reader's IP address.
-- Deleting an account removes its documents and disables all shared links. This cannot be undone.
