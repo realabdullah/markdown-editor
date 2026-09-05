@@ -1,0 +1,32 @@
+export class WorkspaceFileExistsError extends Error {
+  constructor(readonly path: string) {
+    super(`A file already exists at ${path}.`);
+    this.name = "WorkspaceFileExistsError";
+  }
+}
+
+export class WorkspaceBaselineChangedError extends Error {
+  constructor(readonly path: string) {
+    super(`${path} changed on disk since it was opened.`);
+    this.name = "WorkspaceBaselineChangedError";
+  }
+}
+
+export class WorkspaceWriteVerificationError extends Error {
+  constructor(readonly path: string) {
+    super(`${path} did not match the written content after saving.`);
+    this.name = "WorkspaceWriteVerificationError";
+  }
+}
+
+export class WorkspacePermissionError extends Error {
+  constructor(readonly path: string) {
+    super(`Access to ${path} was denied.`);
+    this.name = "WorkspacePermissionError";
+  }
+}
+
+export const isPermissionError = (error: unknown): boolean =>
+  error instanceof WorkspacePermissionError ||
+  (error instanceof DOMException &&
+    (error.name === "NotAllowedError" || error.name === "SecurityError"));

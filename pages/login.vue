@@ -1,6 +1,13 @@
 <script setup lang="ts">
 const route = useRoute();
 const isReauthenticating = route.query.reauthenticate === "1";
+/** Only a same-origin path is accepted, so `next` can never leave the app. */
+const nextPath = computed(() => {
+  const next = route.query.next;
+  return typeof next === "string" && /^\/(?!\/)/.test(next) ? next : "/";
+});
+// The callback page returns here after the provider round trip.
+if (import.meta.client) sessionStorage.setItem("auth:next", nextPath.value);
 const email = ref("");
 const message = ref("");
 const errorMessage = ref("");
@@ -9,7 +16,7 @@ const { user, isConfigured, initialize, signInWithGoogle, signInWithMagicLink } 
 
 onMounted(initialize);
 watch(() => user.value?.id, (id) => {
-  if (id && !isReauthenticating) void navigateTo("/", { replace: true });
+  if (id && !isReauthenticating) void navigateTo(nextPath.value, { replace: true });
 }, { immediate: true });
 
 const sendMagicLink = async () => {

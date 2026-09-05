@@ -24,7 +24,8 @@ export default defineEventHandler((event) => {
       "form-action 'self'",
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https:",
+      // blob: carries workspace images the preview resolves from local files.
+      "img-src 'self' data: blob: https:",
       `connect-src ${connectSources}`,
     ].join("; "),
     "referrer-policy": "strict-origin-when-cross-origin",
