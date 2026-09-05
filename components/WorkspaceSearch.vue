@@ -30,7 +30,7 @@ const summary = computed(() => {
       <input
         id="workspace-search"
         v-model="query"
-        class="w-full rounded-md border border-zinc-300 bg-transparent px-2.5 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:border-zinc-700"
+        class="w-full rounded-md border border-line-strong bg-transparent px-2.5 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         type="search"
         placeholder="Search files and contents"
         autocomplete="off"
@@ -38,7 +38,7 @@ const summary = computed(() => {
     </div>
 
     <p
-      class="px-3 pb-2 text-xs text-zinc-500"
+      class="px-3 pb-2 text-xs text-ink-subtle"
       aria-live="polite"
     >
       {{ summary }}
@@ -53,23 +53,23 @@ const summary = computed(() => {
         :key="`${result.path}:${result.line ?? 0}`"
       >
         <button
-          class="w-full rounded-md px-2 py-1.5 text-left hover:bg-zinc-200/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:hover:bg-zinc-900"
+          class="w-full rounded-md px-2 py-1.5 text-left hover:bg-raised focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           type="button"
           @click="$emit('open', result)"
         >
           <span class="block truncate text-sm">{{ result.name }}</span>
-          <span class="block truncate text-xs text-zinc-500">
+          <span class="block truncate text-xs text-ink-subtle">
             {{ result.path }}<template v-if="result.line">:{{ result.line }}</template>
           </span>
           <span
             v-if="result.excerpt"
-            class="mt-0.5 block truncate text-xs text-zinc-600 dark:text-zinc-400"
+            class="mt-0.5 block truncate text-xs text-ink-muted"
           >{{ result.excerpt }}</span>
         </button>
       </li>
       <li
         v-if="!results.length"
-        class="px-2 py-1.5 text-sm text-zinc-500"
+        class="px-2 py-1.5 text-sm text-ink-subtle"
       >
         No matches. Indexing continues in the background.
       </li>

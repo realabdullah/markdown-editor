@@ -7,7 +7,6 @@ import type {
   WorkspaceScanResult,
 } from "~/types/workspace";
 
-/** Directories that never contain editable repository documentation. */
 export const ALWAYS_EXCLUDED_DIRECTORIES = [
   ".git",
   "node_modules",
@@ -39,11 +38,7 @@ export const readGitignore = async (
 const byPath = <T extends { path: string }>(a: T, b: T) =>
   a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
 
-/**
- * Collects the Markdown files that make up the tree, plus the image assets the
- * preview resolves and relative-path completion offers. Assets are recorded by
- * path only; their bytes are read on demand.
- */
+/** Assets are recorded by path only; their bytes are read on demand. */
 export const scanWorkspace = async (
   root: FileSystemDirectoryHandle,
 ): Promise<WorkspaceScanResult> => {

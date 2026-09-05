@@ -11,7 +11,6 @@ import { renderWorkspaceMarkdown } from "~/utils/workspaceMarkdown";
 const props = defineProps<{
   source: string;
   documentPath: string;
-  /** Resolves a workspace-relative image path to its bytes. */
   resolveAsset: (path: string) => Promise<File | null>;
 }>();
 
@@ -82,10 +81,8 @@ const releaseObjectUrls = () => {
   objectUrls.clear();
 };
 
-/**
- * Relative images render without a `src`. Each one is loaded from disk and
- * attached as a temporary object URL, so no asset is ever copied.
- */
+// Relative images render without a `src`; an object URL is attached so that
+// no asset is ever copied.
 const attachRelativeImages = async () => {
   const container = root.value;
   if (!container) return;
@@ -108,7 +105,6 @@ const attachRelativeImages = async () => {
   }
 };
 
-/** Scrolls to a source line, interpolating between the blocks around it. */
 const revealLine = (line: number) => {
   const container = root.value;
   if (!container) return;
@@ -134,7 +130,6 @@ const onScroll = () => {
   });
 };
 
-/** Jumps to a heading anchor produced by the renderer. */
 const revealHeading = (id: string) => {
   const heading = root.value?.querySelector<HTMLElement>(
     `[id="${CSS.escape(id)}"]`,
@@ -184,7 +179,7 @@ defineExpose({ revealLine, revealHeading });
     <!-- eslint-disable vue/no-v-html -- renderWorkspaceMarkdown sanitises its output -->
     <article
       ref="article"
-      class="prose prose-zinc mx-auto max-w-[72ch] dark:prose-invert"
+      class="prose mx-auto"
       v-html="html"
     />
     <!-- eslint-enable vue/no-v-html -->

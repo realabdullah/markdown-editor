@@ -11,7 +11,6 @@ export default [
       ".nitro/**",
       "dist/**",
       "node_modules/**",
-      "supabase/.temp/**",
     ],
   },
   js.configs.recommended,

@@ -22,7 +22,6 @@ const emit = defineEmits<{ "open-file": [path: string] }>();
 const query = ref("");
 const activeIndex = ref(0);
 
-/** A leading `>` narrows the palette to commands, as in most editors. */
 const isCommandMode = computed(() => query.value.startsWith(">"));
 const term = computed(() =>
   isCommandMode.value ? query.value.slice(1).trim() : query.value.trim(),
@@ -101,9 +100,9 @@ const onKeydown = (event: KeyboardEvent) => {
 <template>
   <DialogRoot v-model:open="open">
     <DialogPortal>
-      <DialogOverlay class="fixed inset-0 z-40 bg-zinc-950/40 backdrop-blur-sm" />
+      <DialogOverlay class="fixed inset-0 z-40 bg-overlay/40 backdrop-blur-sm" />
       <DialogContent
-        class="fixed left-1/2 top-24 z-50 w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl focus:outline-none dark:border-zinc-800 dark:bg-zinc-950"
+        class="fixed left-1/2 top-24 z-50 w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border border-line bg-panel shadow-panel focus:outline-none"
       >
         <DialogTitle class="sr-only">
           Go to file or run a command
@@ -114,7 +113,7 @@ const onKeydown = (event: KeyboardEvent) => {
 
         <input
           v-model="query"
-          class="w-full border-b border-zinc-200 bg-transparent px-4 py-3 text-sm focus:outline-none dark:border-zinc-800"
+          class="w-full border-b border-line bg-transparent px-4 py-3 text-sm focus:outline-none"
           type="text"
           placeholder="Go to file, or type > for commands"
           autocomplete="off"
@@ -136,18 +135,18 @@ const onKeydown = (event: KeyboardEvent) => {
             :id="`palette-${index}`"
             :key="entry.id"
             class="cursor-pointer rounded-md px-3 py-2"
-            :class="index === activeIndex ? 'bg-zinc-100 dark:bg-zinc-900' : ''"
+            :class="index === activeIndex ? 'bg-raised' : ''"
             role="option"
             :aria-selected="index === activeIndex"
             @click="choose(entry)"
             @mousemove="activeIndex = index"
           >
             <span class="block truncate text-sm">{{ entry.label }}</span>
-            <span class="block truncate text-xs text-zinc-500">{{ entry.hint }}</span>
+            <span class="block truncate text-xs text-ink-subtle">{{ entry.hint }}</span>
           </li>
           <li
             v-if="!entries.length"
-            class="px-3 py-2 text-sm text-zinc-500"
+            class="px-3 py-2 text-sm text-ink-subtle"
           >
             Nothing matches “{{ term }}”.
           </li>

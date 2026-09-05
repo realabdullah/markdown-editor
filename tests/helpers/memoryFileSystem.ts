@@ -1,8 +1,4 @@
-/**
- * Minimal in-memory stand-in for the File System Access API, covering the
- * surface the workspace repository uses: directory traversal, file reads,
- * writable streams, and `create` semantics.
- */
+/** Minimal in-memory stand-in for the File System Access API. */
 
 const notFound = (name: string) =>
   new DOMException(`${name} was not found.`, "NotFoundError");
@@ -91,7 +87,6 @@ export class MemoryDirectoryHandle {
   };
 }
 
-/** Seeds `path` with `content`, creating intermediate directories. */
 export const seedFile = async (
   root: MemoryDirectoryHandle,
   path: string,

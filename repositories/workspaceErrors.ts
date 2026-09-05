@@ -31,7 +31,6 @@ export const isPermissionError = (error: unknown): boolean =>
   (error instanceof DOMException &&
     (error.name === "NotAllowedError" || error.name === "SecurityError"));
 
-/** The folder was renamed, moved, or removed while its handle was held. */
 export class WorkspaceRootMissingError extends Error {
   constructor(readonly directoryName: string) {
     super(`${directoryName} is no longer at the location it was opened from.`);
@@ -39,7 +38,6 @@ export class WorkspaceRootMissingError extends Error {
   }
 }
 
-/** The root is intact but this path is not in it any more. */
 export class WorkspaceFileMissingError extends Error {
   constructor(readonly path: string) {
     super(`${path} is no longer in the workspace folder.`);

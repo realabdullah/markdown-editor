@@ -1,4 +1,7 @@
 @import "@fontsource-variable/inter";
+/* Generated token blocks, one per theme; `data-theme` on <html> picks one.
+   Must precede @tailwind — a CSS @import cannot follow other rules. */
+@import "./themes.css";
 
 @tailwind base;
 @tailwind components;
@@ -11,15 +14,15 @@ body,
 }
 
 body {
-  background: #f4f4f5;
-  color: #18181b;
+  background: rgb(var(--surface-app));
+  color: rgb(var(--ink));
   font-family: InterVariable, Inter, Geist, ui-sans-serif, system-ui, sans-serif;
   font-feature-settings: "cv11" 1, "cv10" 1;
 }
 
 ::selection {
-  background: rgb(63 63 70 / 0.6);
-  color: #f4f4f5;
+  background: rgb(var(--selection) / 0.6);
+  color: rgb(var(--selection-fg));
 }
 
 * {
@@ -28,7 +31,7 @@ body {
 }
 
 *:hover {
-  scrollbar-color: rgb(63 63 70) transparent;
+  scrollbar-color: rgb(var(--scrollbar-thumb)) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -46,9 +49,27 @@ body {
 }
 
 *:hover::-webkit-scrollbar-thumb {
-  background-color: rgb(63 63 70);
+  background-color: rgb(var(--scrollbar-thumb));
 }
 
-html { color-scheme: light; }
-html[data-theme="dark"] { color-scheme: dark; }
-html[data-theme="dark"] body { background: #0a0a0a; color: #f4f4f5; }
+@layer components {
+  /* Typography styles `code` with quote marks and no surface of its own, and
+     leaves fenced blocks unbordered. Both read as unfinished against a themed
+     background, so they are filled in here rather than in the prose config. */
+  .prose :where(code):not(:where(pre code, [class~="not-prose"] *)) {
+    background-color: rgb(var(--surface-sunken));
+    border: 1px solid rgb(var(--line));
+    border-radius: 0.25rem;
+    padding: 0.125rem 0.3rem;
+    font-weight: 500;
+  }
+
+  .prose :where(code):not(:where(pre code, [class~="not-prose"] *))::before,
+  .prose :where(code):not(:where(pre code, [class~="not-prose"] *))::after {
+    content: none;
+  }
+
+  .prose :where(pre) {
+    border: 1px solid rgb(var(--line));
+  }
+}

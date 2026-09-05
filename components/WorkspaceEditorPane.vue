@@ -29,7 +29,8 @@ import {
   type CompletionContext,
 } from "@codemirror/autocomplete";
 import { markdown } from "@codemirror/lang-markdown";
-import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
+import { syntaxHighlighting } from "@codemirror/language";
+import { markdownHighlightStyle } from "~/utils/editorHighlight";
 import { toRelativePath } from "~/repositories/workspacePaths";
 import { createEchoGuard } from "~/utils/scrollSync";
 import {
@@ -45,10 +46,11 @@ import {
   type FormatResult,
 } from "~/utils/markdownFormatting";
 import type { WorkspaceFormatCommand } from "~/types/workspace";
+import type { ThemeAppearance } from "~/types/theme";
 
 const props = defineProps<{
   modelValue: string;
-  isDark: boolean;
+  appearance: ThemeAppearance;
   documentPath: string;
   assetPaths: string[];
 }>();
@@ -68,14 +70,20 @@ let editor: EditorView | null = null;
 let scrollFrame = 0;
 const echo = createEchoGuard();
 
+/**
+ * Colours are read from the theme's custom properties rather than passed in,
+ * so a theme change repaints the editor without rebuilding anything. The one
+ * value CodeMirror needs as data is the light/dark flag, which decides how its
+ * own built-in styles behave — hence the compartment below.
+ */
 const buildTheme = () =>
   EditorView.theme(
     {
       "&": {
         height: "100%",
         fontSize: "15px",
-        background: "transparent",
-        color: props.isDark ? "rgb(244 244 245)" : "rgb(24 24 27)",
+        background: "rgb(var(--editor-bg))",
+        color: "rgb(var(--editor-fg))",
       },
       ".cm-scroller": {
         fontFamily:
@@ -86,43 +94,41 @@ const buildTheme = () =>
         padding: "24px 0 40vh",
         maxWidth: "72ch",
         margin: "0 auto",
-        caretColor: props.isDark ? "rgb(255 255 255)" : "rgb(24 24 27)",
+        caretColor: "rgb(var(--editor-caret))",
       },
       ".cm-gutters": {
         border: "none",
         backgroundColor: "transparent",
-        color: props.isDark ? "rgb(82 82 91)" : "rgb(161 161 170)",
+        color: "rgb(var(--editor-gutter))",
       },
-      ".cm-activeLine": { backgroundColor: "transparent" },
+      ".cm-activeLine": { backgroundColor: "rgb(var(--editor-active-line))" },
       ".cm-activeLineGutter": {
         background: "transparent",
-        color: props.isDark ? "rgb(212 212 216)" : "rgb(63 63 70)",
+        color: "rgb(var(--editor-gutter-active))",
       },
       "&.cm-focused": { outline: "none" },
       ".cm-cursor, .cm-dropCursor": {
-        borderLeftColor: props.isDark ? "rgb(255 255 255)" : "rgb(24 24 27)",
+        borderLeftColor: "rgb(var(--editor-caret))",
         borderLeftWidth: "2px",
       },
       ".cm-selectionBackground, .cm-content ::selection": {
-        backgroundColor: props.isDark
-          ? "rgba(161, 161, 170, 0.28)"
-          : "rgba(113, 113, 122, 0.22)",
+        backgroundColor: "rgb(var(--editor-selection) / 0.28)",
+      },
+      ".cm-selectionMatch": {
+        backgroundColor: "rgb(var(--editor-selection-match) / 0.35)",
       },
       ".cm-panels": {
-        backgroundColor: props.isDark ? "rgb(24 24 27)" : "rgb(244 244 245)",
+        backgroundColor: "rgb(var(--editor-panel))",
         color: "inherit",
-        borderTop: props.isDark
-          ? "1px solid rgb(39 39 42)"
-          : "1px solid rgb(228 228 231)",
+        borderTop: "1px solid rgb(var(--editor-panel-border))",
       },
       ".cm-panel input, .cm-panel button": {
         fontFamily: "inherit",
       },
     },
-    { dark: props.isDark },
+    { dark: props.appearance === "dark" },
   );
 
-/** Offers workspace image assets while typing a Markdown link or image target. */
 const completeAssetPath = (context: CompletionContext) => {
   const typed = context.matchBefore(/\]\(([^)\s]*)$/);
   if (!typed || (typed.from === typed.to && !context.explicit)) return null;
@@ -220,7 +226,6 @@ const TRANSFORMS: Record<WorkspaceFormatCommand, Transform> = {
   table: (text, from) => insertTable(text, from),
 };
 
-/** Runs a pure formatting transform over the current selection. */
 const applyFormat = (command: WorkspaceFormatCommand) => {
   if (!editor) return;
   const { from, to } = editor.state.selection.main;
@@ -277,7 +282,7 @@ onMounted(() => {
         indentWithTab,
       ]),
       markdown(),
-      syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+      syntaxHighlighting(markdownHighlightStyle, { fallback: true }),
       EditorView.lineWrapping,
       themeCompartment.of(buildTheme()),
       EditorView.updateListener.of((update: ViewUpdate) => {
@@ -308,7 +313,7 @@ watch(
 );
 
 watch(
-  () => props.isDark,
+  () => props.appearance,
   () => {
     editor?.dispatch({ effects: themeCompartment.reconfigure(buildTheme()) });
   },

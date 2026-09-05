@@ -1,4 +1,5 @@
 import { defineNuxtConfig } from "nuxt/config"
+import { themeBootScript } from "./utils/themeBoot"
 
 export default defineNuxtConfig({
   compatibilityDate: "2026-04-15",
@@ -16,7 +17,6 @@ export default defineNuxtConfig({
         "@vue/devtools-core",
         "@vue/devtools-kit",
         "reka-ui",
-        "jspdf",
         "@codemirror/state",
         "@codemirror/view",
         "@codemirror/commands",
@@ -30,6 +30,10 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: "Modern Minimalistic Markdown Editor",
+      script: [
+        // Picks the theme before the first paint; see utils/themeBoot.ts.
+        { innerHTML: themeBootScript(), tagPosition: "head" },
+      ],
       meta: [
         { name: "viewport", content: "width=device-width, initial-scale=1" },
         {
@@ -38,21 +42,6 @@ export default defineNuxtConfig({
             "A fast privacy-first markdown editor with real-time preview and offline support.",
         },
       ],
-    },
-  },
-  runtimeConfig: {
-    supabaseSecretKey: process.env.NUXT_SUPABASE_SECRET_KEY,
-    rateLimitPepper: process.env.NUXT_RATE_LIMIT_PEPPER,
-    public: {
-      supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL,
-      supabasePublishableKey: process.env.NUXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-    },
-  },
-  routeRules: {
-    "/api/**": { cache: false },
-    "/p/**": {
-      cache: false,
-      headers: { "cache-control": "no-store" },
     },
   },
 })

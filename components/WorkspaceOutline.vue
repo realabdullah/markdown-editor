@@ -44,7 +44,7 @@ watch(
   >
     <p
       v-if="!items.length"
-      class="px-2 py-1 text-sm text-zinc-500"
+      class="px-2 py-1 text-sm text-ink-subtle"
     >
       No headings yet.
     </p>
@@ -57,11 +57,11 @@ watch(
         :key="`${item.line}-${item.id}`"
       >
         <button
-          class="w-full truncate rounded-md py-1 pr-2 text-left text-sm hover:bg-zinc-200/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 dark:hover:bg-zinc-900"
+          class="w-full truncate rounded-md py-1 pr-2 text-left text-sm hover:bg-raised focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           :class="[
             INDENT[item.level] || 'pl-16',
-            item.id === activeId ? 'bg-zinc-200 font-medium dark:bg-zinc-800' : '',
-            item.level === 1 ? 'font-medium' : 'text-zinc-600 dark:text-zinc-400',
+            item.id === activeId ? 'bg-raised font-medium' : '',
+            item.level === 1 ? 'font-medium' : 'text-ink-muted',
           ]"
           type="button"
           :aria-current="item.id === activeId ? 'true' : undefined"

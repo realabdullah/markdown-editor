@@ -109,7 +109,6 @@ export const useWorkspace = () => {
     }
   };
 
-  /** Builds the tree first, then fills the content index one file at a time. */
   const scan = async () => {
     const active = session.value;
     if (!active) return;
@@ -268,7 +267,6 @@ export const useWorkspace = () => {
     }
   };
 
-  /** Manual save: rescan the file first, then write and verify. */
   const save = async () => {
     const active = session.value;
     const current = document.value;
@@ -313,7 +311,6 @@ export const useWorkspace = () => {
     }
   };
 
-  /** Recreating the file is the only route that does not discard the buffer. */
   const saveOverMissingFile = async (path: string) => {
     const active = session.value;
     if (!active) return;
