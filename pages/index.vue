@@ -603,7 +603,7 @@ onBeforeUnmount(() => {
       >
         <aside
           id="workspace-sidebar"
-          class="w-72 shrink-0 flex-col border-r border-zinc-200 dark:border-zinc-800 lg:flex"
+          class="w-72 shrink-0 flex-col border-r border-zinc-200 dark:border-zinc-800 lg:static lg:z-auto lg:flex"
           :class="isSidebarOpen ? 'absolute inset-y-14 left-0 z-30 flex bg-white dark:bg-[#0a0a0a]' : 'hidden'"
         >
           <WorkspaceSearch
