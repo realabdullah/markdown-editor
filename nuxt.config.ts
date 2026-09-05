@@ -2,8 +2,8 @@ import { defineNuxtConfig } from "nuxt/config"
 
 export default defineNuxtConfig({
   compatibilityDate: "2026-04-15",
-  devtools: { enabled: true },
-  ssr: true,
+  devtools: { enabled: false },
+  ssr: false,
   css: ["~/assets/css/tailwind.css"],
   modules: ["@nuxtjs/tailwindcss"],
   imports: {

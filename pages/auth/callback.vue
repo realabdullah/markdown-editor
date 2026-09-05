@@ -11,7 +11,11 @@ onMounted(async () => {
     if (initializationError) throw initializationError;
     const { data, error } = await $supabase.auth.getSession();
     if (error || !data.session) throw error || new Error("No session");
-    await navigateTo("/", { replace: true });
+    // Set before sign-in started; only a same-origin path is honoured.
+    const next = sessionStorage.getItem("auth:next");
+    sessionStorage.removeItem("auth:next");
+    const destination = next && /^\/(?!\/)/.test(next) ? next : "/";
+    await navigateTo(destination, { replace: true });
   } catch {
     status.value = "Unable to finish signing in. Request a new link or try signing in again.";
     failed.value = true;
