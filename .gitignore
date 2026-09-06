@@ -21,3 +21,9 @@ logs
 .env
 .env.*
 !.env.example
+
+AGENTS.md
+GIT_WORKFLOW_PLAN.md
+PLAN.md
+THEME.md
+.claude
