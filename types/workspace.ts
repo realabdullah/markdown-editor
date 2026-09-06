@@ -20,6 +20,7 @@ export interface WorkspaceAsset {
 export interface WorkspaceScanResult {
   files: WorkspaceFile[];
   assets: WorkspaceAsset[];
+  directories: string[];
 }
 
 export interface WorkspaceFolder {
@@ -71,6 +72,7 @@ export interface WorkspaceRepository {
   requestAccess: (session: WorkspaceSession) => Promise<WorkspaceSession>;
   reconnect: () => Promise<WorkspaceSession>;
   scan: (session: WorkspaceSession) => Promise<WorkspaceScanResult>;
+  createDirectory: (session: WorkspaceSession, path: string) => Promise<void>;
   read: (session: WorkspaceSession, path: string) => Promise<WorkspaceDocument>;
   create: (
     session: WorkspaceSession,

@@ -45,6 +45,7 @@ export const scanWorkspace = async (
   const matcher = ignore().add(await readGitignore(root));
   const files: WorkspaceFile[] = [];
   const assets: WorkspaceAsset[] = [];
+  const directories: string[] = [];
 
   const walk = async (directory: FileSystemDirectoryHandle, prefix: string) => {
     for await (const [name, handle] of directory.entries()) {
@@ -54,6 +55,7 @@ export const scanWorkspace = async (
         if (excluded.has(name) || matcher.ignores(`${path}/`)) {
           continue;
         }
+        directories.push(path);
         await walk(handle as FileSystemDirectoryHandle, path);
         continue;
       }
@@ -85,10 +87,17 @@ export const scanWorkspace = async (
   };
 
   await walk(root, "");
-  return { files: files.sort(byPath), assets: assets.sort(byPath) };
+  return {
+    files: files.sort(byPath),
+    assets: assets.sort(byPath),
+    directories: directories.sort(),
+  };
 };
 
-export const buildWorkspaceTree = (files: WorkspaceFile[]): WorkspaceFolder => {
+export const buildWorkspaceTree = (
+  files: WorkspaceFile[],
+  directoryPaths: string[] = [],
+): WorkspaceFolder => {
   const root: WorkspaceFolder = {
     path: "",
     name: "",
@@ -118,6 +127,7 @@ export const buildWorkspaceTree = (files: WorkspaceFile[]): WorkspaceFolder => {
     return folder;
   };
 
+  for (const path of directoryPaths) ensureFolder(path);
   for (const file of files) {
     ensureFolder(file.parentPath).files.push(file);
   }

@@ -77,6 +77,12 @@ describe("scanWorkspace", () => {
 });
 
 describe("buildWorkspaceTree", () => {
+  it("keeps empty directories in the tree", () => {
+    const tree = buildWorkspaceTree([], ["notes", "notes/drafts"]);
+
+    expect(tree.folders[0]?.path).toBe("notes");
+    expect(tree.folders[0]?.folders[0]?.path).toBe("notes/drafts");
+  });
   it("nests files under their folders", async () => {
     const tree = buildWorkspaceTree(
       await scan({

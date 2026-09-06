@@ -15,6 +15,7 @@ const {
   tree,
   files,
   assets,
+  directories,
   scanState,
   document: activeDocument,
   editorContent,
@@ -33,6 +34,7 @@ const {
   scan,
   openFile,
   createFile,
+  createDirectory,
   save,
   setEditorContent,
   restoreLastOpened,
@@ -79,6 +81,15 @@ const secureUrl = ref("");
 const isSidebarOpen = ref(false);
 const openError = ref("");
 const newFileName = ref("");
+const selectedFolderPath = ref("");
+const contextMenu = reactive({
+  open: false,
+  x: 0,
+  y: 0,
+  kind: "root" as "root" | "folder" | "file",
+  parentPath: "",
+});
+const contextMenuTrigger = ref<HTMLElement | null>(null);
 const searchQuery = ref("");
 
 useSeoMeta({
@@ -240,9 +251,48 @@ const openSearchResult = async (result: WorkspaceSearchResult) => {
 const submitNewFile = async () => {
   const name = newFileName.value.trim();
   if (!name) return;
-  await createFile(name);
+  await createFile(name, selectedFolderPath.value);
   newFileName.value = "";
   if (isNarrow.value) isSidebarOpen.value = false;
+};
+
+const promptForFolder = async (parentPath = selectedFolderPath.value) => {
+  contextMenu.open = false;
+  const name = window.prompt("Folder name");
+  if (!name?.trim()) return;
+  const path = await createDirectory(name, parentPath);
+  if (path) selectedFolderPath.value = path;
+  contextMenu.open = false;
+};
+
+const closeContextMenu = () => {
+  contextMenu.open = false;
+  nextTick(() => contextMenuTrigger.value?.focus());
+};
+
+const promptForFile = async (parentPath = selectedFolderPath.value) => {
+  contextMenu.open = false;
+  const name = window.prompt("Markdown file name");
+  if (!name?.trim()) return;
+  await createFile(name, parentPath);
+  contextMenu.open = false;
+  if (isNarrow.value) isSidebarOpen.value = false;
+};
+
+const openTreeContextMenu = (
+  event: MouseEvent,
+  target: { kind: "folder" | "file"; path: string },
+) => {
+  const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  contextMenu.x = Math.min(event.clientX || bounds.left + 16, window.innerWidth - 208);
+  contextMenu.y = Math.min(event.clientY || bounds.top + bounds.height, window.innerHeight - 104);
+  contextMenu.kind = target.kind;
+  contextMenu.parentPath = target.kind === "folder"
+    ? target.path
+    : target.path.slice(0, Math.max(0, target.path.lastIndexOf("/")));
+  selectedFolderPath.value = contextMenu.parentPath;
+  contextMenuTrigger.value = event.currentTarget as HTMLElement;
+  contextMenu.open = true;
 };
 
 const goToHeading = (item: WorkspaceOutlineItem) => {
@@ -589,6 +639,7 @@ onBeforeUnmount(() => {
             v-show="!searchQuery.trim()"
             class="min-h-0 flex-1 overflow-auto px-2 pb-2"
             aria-label="Workspace files"
+            @contextmenu.self.prevent="openTreeContextMenu($event, { kind: 'folder', path: '' })"
           >
             <p
               v-if="scanState === 'scanning'"
@@ -597,7 +648,7 @@ onBeforeUnmount(() => {
               Scanning folder…
             </p>
             <p
-              v-else-if="!files.length"
+              v-else-if="!files.length && !directories.length"
               class="px-2 py-1 text-sm text-ink-subtle"
             >
               No Markdown files found in this folder.
@@ -606,31 +657,50 @@ onBeforeUnmount(() => {
               v-else
               :folder="tree"
               :active-path="activeDocument?.path || ''"
+              :selected-folder-path="selectedFolderPath"
               @open="openPath"
+              @select-folder="selectedFolderPath = $event"
+              @context="openTreeContextMenu"
             />
           </nav>
 
           <form
-            class="flex shrink-0 gap-2 border-t border-line p-3"
+            class="shrink-0 border-t border-line p-3"
             @submit.prevent="submitNewFile"
           >
-            <label
-              class="sr-only"
-              for="workspace-new-file"
-            >New Markdown file name</label>
-            <input
-              id="workspace-new-file"
-              v-model="newFileName"
-              class="min-w-0 flex-1 rounded-md border border-line-strong bg-transparent px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-              placeholder="new-note.md"
-              type="text"
+            <p
+              class="mb-2 truncate text-xs text-ink-subtle"
+              :title="selectedFolderPath || 'Workspace root'"
             >
-            <button
-              class="rounded-md border border-line-strong px-2.5 py-1.5 text-sm hover:bg-raised focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-              type="submit"
-            >
-              New
-            </button>
+              Create in {{ selectedFolderPath || "Workspace root" }}
+            </p>
+            <div class="flex gap-2">
+              <label
+                class="sr-only"
+                for="workspace-new-file"
+              >New Markdown file name</label>
+              <input
+                id="workspace-new-file"
+                v-model="newFileName"
+                class="min-w-0 flex-1 rounded-md border border-line-strong bg-transparent px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                placeholder="new-note.md"
+                type="text"
+              >
+              <button
+                class="rounded-md border border-line-strong px-2.5 py-1.5 text-sm hover:bg-raised focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                type="submit"
+              >
+                New
+              </button>
+              <button
+                class="rounded-md border border-line-strong px-2.5 py-1.5 text-sm hover:bg-raised focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                type="button"
+                aria-label="Create a new folder"
+                @click="promptForFolder()"
+              >
+                Folder
+              </button>
+            </div>
           </form>
         </aside>
 
@@ -855,6 +925,16 @@ onBeforeUnmount(() => {
     />
 
     <WorkspaceSettingsDialog v-model:open="isSettingsOpen" />
+
+    <WorkspaceContextMenu
+      :open="contextMenu.open"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :kind="contextMenu.kind"
+      @close="closeContextMenu"
+      @new-file="promptForFile(contextMenu.parentPath)"
+      @new-folder="promptForFolder(contextMenu.parentPath)"
+    />
 
     <WorkspaceConflictDialog
       v-if="conflict"

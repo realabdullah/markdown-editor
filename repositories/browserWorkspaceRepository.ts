@@ -279,6 +279,21 @@ export class BrowserWorkspaceRepository implements WorkspaceRepository {
     }
   };
 
+  createDirectory = async (session: WorkspaceSession, path: string) => {
+    const segments = path.split("/").filter(Boolean);
+    if (!segments.length || segments.some((segment) => segment === "." || segment === "..")) {
+      throw new TypeError(`"${path}" is not a workspace directory path.`);
+    }
+    try {
+      let directory = session.directoryHandle;
+      for (const segment of segments) {
+        directory = await directory.getDirectoryHandle(segment, { create: true });
+      }
+    } catch (error) {
+      throw await this.toMissingError(session, path, error);
+    }
+  };
+
   readAsset = async (session: WorkspaceSession, path: string): Promise<File> =>
     (await this.resolveFile(session, path)).getFile();
 

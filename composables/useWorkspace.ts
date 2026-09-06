@@ -4,7 +4,7 @@ import {
   isPermissionError,
 } from "~/repositories/workspaceErrors";
 import { workspaceSearchIndex } from "~/repositories/workspaceIndex";
-import { fileNameOf, toMarkdownPath } from "~/repositories/workspacePaths";
+import { fileNameOf, toDirectoryPath, toMarkdownPath } from "~/repositories/workspacePaths";
 import { buildWorkspaceTree } from "~/repositories/workspaceScanner";
 import { countDocumentStats, extractOutline } from "~/utils/workspaceMarkdown";
 import {
@@ -28,6 +28,7 @@ export const useWorkspace = () => {
   const session = useState<WorkspaceSession | null>("workspaceSession", () => null);
   const files = useState<WorkspaceFile[]>("workspaceFiles", () => []);
   const assets = useState<WorkspaceAsset[]>("workspaceAssets", () => []);
+  const directories = useState<string[]>("workspaceDirectories", () => []);
   const scanState = useState<WorkspaceSession["scanState"]>(
     "workspaceScanState",
     () => "idle",
@@ -47,7 +48,7 @@ export const useWorkspace = () => {
     selected: 0,
   }));
 
-  const tree = computed(() => buildWorkspaceTree(files.value));
+  const tree = computed(() => buildWorkspaceTree(files.value, directories.value));
   const isDirty = computed(
     () =>
       !!document.value &&
@@ -117,7 +118,7 @@ export const useWorkspace = () => {
     const generation = (scanGeneration += 1);
 
     try {
-      const { files: scanned, assets: scannedAssets } =
+      const { files: scanned, assets: scannedAssets, directories: scannedDirectories } =
         await repository.scan(active);
       if (generation !== scanGeneration) return;
 
@@ -144,6 +145,7 @@ export const useWorkspace = () => {
 
       files.value = scanned;
       assets.value = scannedAssets;
+      directories.value = scannedDirectories;
       scanState.value = "complete";
       void indexContents(generation);
     } catch (error) {
@@ -264,6 +266,21 @@ export const useWorkspace = () => {
       await repository.saveLastOpened(active.id, path);
     } catch (error) {
       reportError(error, `${path} could not be created.`);
+    }
+  };
+
+  const createDirectory = async (name: string, parentPath = "") => {
+    const active = session.value;
+    if (!active) return undefined;
+    errorMessage.value = "";
+    try {
+      const path = toDirectoryPath(name, parentPath);
+      await repository.createDirectory(active, path);
+      await scan();
+      return path;
+    } catch (error) {
+      reportError(error, "The folder could not be created.");
+      return undefined;
     }
   };
 
@@ -468,6 +485,7 @@ export const useWorkspace = () => {
     session,
     files,
     assets,
+    directories,
     tree,
     scanState,
     document,
@@ -487,6 +505,7 @@ export const useWorkspace = () => {
     scan,
     openFile,
     createFile,
+    createDirectory,
     save,
     setEditorContent,
     refreshActiveDocument,

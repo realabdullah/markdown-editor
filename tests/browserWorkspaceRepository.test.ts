@@ -116,6 +116,14 @@ describe("BrowserWorkspaceRepository files", () => {
     );
   });
 
+  it("creates nested directories that are included in scans when empty", async () => {
+    await repository.createDirectory(session, "notes/drafts");
+
+    const result = await repository.scan(session);
+    expect(result.directories).toContain("notes/drafts");
+    expect(root.children.get("notes")).toBeInstanceOf(MemoryDirectoryHandle);
+  });
+
   it("writes and verifies content by rereading and rehashing it", async () => {
     const document = await repository.read(session, "README.md");
 

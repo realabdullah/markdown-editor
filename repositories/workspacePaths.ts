@@ -10,6 +10,14 @@ export const hashContent = async (content: string): Promise<string> => {
 
 const ILLEGAL_NAME_CHARACTERS = /[\\/:*?"<>|]/g;
 
+export const toDirectoryPath = (input: string, parentPath = ""): string => {
+  const name = input.trim().replace(ILLEGAL_NAME_CHARACTERS, "-");
+  if (!name || name === "." || name === "..") {
+    throw new TypeError("Enter a valid folder name.");
+  }
+  return parentPath ? `${parentPath}/${name}` : name;
+};
+
 export const toMarkdownPath = (input: string, parentPath = ""): string => {
   const name = input.trim().replace(ILLEGAL_NAME_CHARACTERS, "-");
   const withExtension = name.toLowerCase().endsWith(".md")

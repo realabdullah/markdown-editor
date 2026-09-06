@@ -4,6 +4,7 @@ import {
   isImageAssetPath,
   parentPathOf,
   toConflictPath,
+  toDirectoryPath,
   toMarkdownPath,
   toRelativePath,
 } from "../repositories/workspacePaths";
@@ -13,6 +14,12 @@ describe("workspace path helpers", () => {
     expect(toMarkdownPath("New note")).toBe("New note.md");
     expect(toMarkdownPath("guide.md", "docs")).toBe("docs/guide.md");
     expect(toMarkdownPath("a/b:c")).toBe("a-b-c.md");
+  });
+
+  it("builds safe directory paths", () => {
+    expect(toDirectoryPath("Drafts", "notes")).toBe("notes/Drafts");
+    expect(toDirectoryPath("ideas/archive")).toBe("ideas-archive");
+    expect(() => toDirectoryPath("..")).toThrow("valid folder name");
   });
 
   it("splits paths into parent and file name", () => {

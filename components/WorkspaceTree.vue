@@ -5,12 +5,22 @@ withDefaults(
   defineProps<{
     folder: WorkspaceFolder;
     activePath: string;
+    selectedFolderPath?: string;
     depth?: number;
   }>(),
-  { depth: 0 },
+  { depth: 0, selectedFolderPath: "" },
 );
 
-defineEmits<{ open: [path: string] }>();
+const emit = defineEmits<{
+  open: [path: string];
+  selectFolder: [path: string];
+  context: [event: MouseEvent, target: { kind: "folder" | "file"; path: string }];
+}>();
+
+const forwardContext = (
+  event: MouseEvent,
+  target: { kind: "folder" | "file"; path: string },
+) => emit("context", event, target);
 </script>
 
 <template>
@@ -22,14 +32,23 @@ defineEmits<{ open: [path: string] }>();
       v-for="child in folder.folders"
       :key="child.path"
     >
-      <p class="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+      <button
+        class="w-full rounded-md px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-ink-subtle hover:bg-raised focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        :class="child.path === selectedFolderPath && 'bg-raised text-ink'"
+        type="button"
+        @click="$emit('selectFolder', child.path)"
+        @contextmenu.prevent="$emit('context', $event, { kind: 'folder', path: child.path })"
+      >
         {{ child.name }}
-      </p>
+      </button>
       <WorkspaceTree
         :folder="child"
         :active-path="activePath"
+        :selected-folder-path="selectedFolderPath"
         :depth="depth + 1"
         @open="$emit('open', $event)"
+        @select-folder="$emit('selectFolder', $event)"
+        @context="forwardContext"
       />
     </li>
 
@@ -48,6 +67,7 @@ defineEmits<{ open: [path: string] }>();
         :aria-current="file.path === activePath ? 'true' : undefined"
         :title="file.path"
         @click="$emit('open', file.path)"
+        @contextmenu.prevent="$emit('context', $event, { kind: 'file', path: file.path })"
       >
         {{ file.name }}
         <span
